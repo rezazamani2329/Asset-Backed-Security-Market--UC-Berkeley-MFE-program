@@ -1,0 +1,21 @@
+# --- Licensed data: never commit ---
+data/raw/*
+data/processed/*
+!data/raw/.gitkeep
+!data/processed/.gitkeep
+*.xlsx
+*.xls
+*.csv
+*.parquet
+
+# --- Python ---
+__pycache__/
+*.pyc
+.venv/
+.ipynb_checkpoints/
+.pytest_cache/
+
+# --- Outputs / OS ---
+outputs/*
+!outputs/.gitkeep
+.DS_Store
