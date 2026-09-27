@@ -3,7 +3,7 @@
 UC Berkeley MFE · MFE230M Asset Securitization (ABSM) · Fall 2026 · Final Project, **Track 2**
 **Instructor:** Professor Nancy Wallace, UC Berkeley Haas School of Business
 
-**Team:** Reza Zamani, Mel, HS, Coco, Samrajit
+**Team:** Reza Zamani, Al, HS, Coco, Samrajit
 
 ## Objective
 Analyze and price Freddie Mac STACR 2026-DNA1 (classes A-1, M-1, M-2) from the
