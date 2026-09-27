@@ -1,7 +1,16 @@
 # Pricing GSE Credit Risk Transfer Notes — STACR 2026-DNA1
 
 UC Berkeley MFE · MFE230M Asset Securitization (ABSM) · Fall 2026 · Final Project, **Track 2**
-Team: Reza, Samrajit, Al Yazid, CoCo, HS
+**Instructor:** Professor Nancy Wallace, UC Berkeley Haas School of Business
+
+## Team
+| Member | Role |
+|---|---|
+| Reza Zamani | Collateral modeling (default, prepayment, severity) & spread decomposition |
+| Mel | Deal structure analysis & written report lead |
+| HS | Data engineering & pool profiling |
+| Coco | Scenarios & pricing |
+| Samrajit | Waterfall engine & integration |
 
 ## Objective
 Analyze and price Freddie Mac STACR 2026-DNA1 (classes A-1, M-1, M-2) from the
