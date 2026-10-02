@@ -7,7 +7,7 @@ the Feb 2031 call (about 53 months).
 ```
 clean.py (HS) ─┐
                ├─► prepayment.py ─┐
-scenarios.py ──┤                  ├─► collateral_projection.project_pool ─► waterfall.py
+scenarios.py ──┤                  ├─► collateral_projection.project_collateral ─► waterfall.py
    (Coco)      └─► credit_model.py┘
 ```
 
@@ -26,9 +26,9 @@ scenarios.py ──┤                  ├─► collateral_projection.project_
 
 Implement these in order. Each one has a test in `tests/test_collateral.py`:
 
-1. `cpr_to_smm`, `smm_to_cpr`, `cdr_to_mdr`: unit conversions
+1. `calculate_smm`, `smm_to_cpr`, `cdr_to_mdr`: unit conversions
 2. `scheduled_principal`: level-pay amortization
-3. `project_pool` using **constant** CPR / CDR / severity (e.g. 10% CPR to match the PPM pricing
+3. `project_collateral` using **constant** CPR / CDR / severity (e.g. 10% CPR to match the PPM pricing
    speed, 0.2% CDR, 25% severity)
 4. Test: the balance is conserved every month, and the starting balance is $19.44bn
 
@@ -51,7 +51,7 @@ real table within days, and he can build the waterfall while you build the behav
 ## Step 3: Prepayment (`src/prepayment.py`)
 
 - `refi_incentive`: loan coupon − market mortgage rate along the path
-- `cpr`: S-curve in incentive × seasoning ramp × burnout, with a turnover floor
+- `calculate_cpr`: S-curve in incentive × seasoning ramp × burnout, with a turnover floor
 - Fit it to the historical data: bucket loans by incentive and compute the empirical CPR
 
 > Think: should the S-curve be logistic or piecewise linear? Does 50 bp of incentive
@@ -60,8 +60,8 @@ real table within days, and he can build the waterfall while you build the behav
 ## Step 4: Credit (`src/credit_model.py`)
 
 - `mark_to_market_ltv`: current LTV rolled forward along the HPI path
-- `default_rate`: a monthly hazard driven by MTM LTV, FICO, DTI, occupancy, and current dq status
-- `severity`: actual loss = UPB + delinquent interest + costs − sale proceeds − MI
+- `calculate_credit_event_rate`: a monthly hazard driven by MTM LTV, FICO, DTI, occupancy, and current dq status
+- `calculate_loss_severity`: actual loss = UPB + delinquent interest + costs − sale proceeds − MI
 - `modification_loss`: modification frequency × size of the rate cut
 - A liquidation lag (default → credit event), which also produces `distressed_balance`
 
@@ -70,7 +70,7 @@ real table within days, and he can build the waterfall while you build the behav
 
 ## Step 5: Scenarios and validation
 
-- `run_scenarios` runs base / good / moderate / severe on all paths
+- `run_scenarios` runs good / base / moderate / severe on all paths
 - Sanity checks (these are the skipped tests): rates ↓ ⇒ CPR ↑; HPI ↓ ⇒ defaults ↑ and severity ↑
 - Backtest: does the model reproduce the pool's observed CPR and dq since cut-off
   ($22.78bn → $19.44bn)?
@@ -87,8 +87,8 @@ real table within days, and he can build the waterfall while you build the behav
 
 | File | Functions |
 |---|---|
-| `src/prepayment.py` | cpr_to_smm, smm_to_cpr, refi_incentive, cpr |
-| `src/credit_model.py` | cdr_to_mdr, mark_to_market_ltv, default_rate, severity, modification_loss |
-| `src/collateral_projection.py` | scheduled_principal, project_pool, run_scenarios |
+| `src/prepayment.py` | calculate_smm, smm_to_cpr, refi_incentive, calculate_cpr, calculate_prepayment |
+| `src/credit_model.py` | cdr_to_mdr, mark_to_market_ltv, calculate_credit_event_rate, calculate_credit_events, calculate_loss_severity, modification_loss |
+| `src/collateral_projection.py` | scheduled_principal, project_collateral, run_scenarios, placeholder_scenarios |
 | `tests/test_collateral.py` | conversions, economic direction, balance conservation |
 | `notebooks/` | calibration + the three figures |

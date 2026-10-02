@@ -31,7 +31,7 @@ PARAMS = {
 }
 
 
-def cpr_to_smm(cpr: np.ndarray) -> np.ndarray:
+def calculate_smm(cpr: np.ndarray) -> np.ndarray:
     """Annual CPR -> single monthly mortality: 1 - CPR = (1 - SMM)^12."""
     cpr = np.asarray(cpr, dtype=float)
     return 1.0 - (1.0 - cpr) ** (1.0 / 12.0)
@@ -49,7 +49,7 @@ def refi_incentive(loans: pd.DataFrame, mortgage_rate: np.ndarray) -> np.ndarray
     return coupon[:, None] - np.asarray(mortgage_rate, dtype=float)[None, :]
 
 
-def cpr(loans: pd.DataFrame, mortgage_rate: np.ndarray, params: dict = PARAMS) -> np.ndarray:
+def calculate_cpr(loans: pd.DataFrame, mortgage_rate: np.ndarray, params: dict = PARAMS) -> np.ndarray:
     """Annual CPR per loan per month, shape (n_loans, n_months)."""
     p = params
     inc = refi_incentive(loans, mortgage_rate)
@@ -64,3 +64,15 @@ def cpr(loans: pd.DataFrame, mortgage_rate: np.ndarray, params: dict = PARAMS) -
     ramp = np.minimum(1.0, age / p["ramp_months"])
 
     return np.clip(ramp * (p["turnover"] + p["refi_max"] * s_curve * burnout), 0.0, 0.99)
+
+
+def calculate_prepayment(balance: np.ndarray, scheduled_principal: np.ndarray,
+                         smm: np.ndarray) -> np.ndarray:
+    """Unscheduled principal for one month: PP_t = SMM_t * (B_{t-1} - scheduled principal_t)."""
+    return np.asarray(smm, dtype=float) * (np.asarray(balance, dtype=float)
+                                           - np.asarray(scheduled_principal, dtype=float))
+
+
+# Earlier names, kept so existing code keeps working
+cpr_to_smm = calculate_smm
+cpr = calculate_cpr

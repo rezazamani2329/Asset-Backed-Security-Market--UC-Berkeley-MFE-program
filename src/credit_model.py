@@ -72,8 +72,12 @@ def mark_to_market_ltv(loans: pd.DataFrame, hpi_path: np.ndarray) -> np.ndarray:
     return _current_ltv(loans)[:, None] / hpi[None, 1:]
 
 
-def default_rate(loans: pd.DataFrame, hpi_path: np.ndarray, params: dict = PARAMS) -> np.ndarray:
-    """Monthly default probability per loan per month, shape (n_loans, n_months)."""
+def calculate_credit_event_rate(loans: pd.DataFrame, hpi_path: np.ndarray,
+                                params: dict = PARAMS) -> np.ndarray:
+    """Monthly default probability (MDR) per loan per month, shape (n_loans, n_months).
+
+    A default enters the liquidation pipeline and becomes a credit event LIQ_LAG months later.
+    """
     p = params
     ltv = mark_to_market_ltv(loans, hpi_path)
     fico = pd.to_numeric(loans["Credit Score"], errors="coerce")
@@ -97,7 +101,8 @@ def default_rate(loans: pd.DataFrame, hpi_path: np.ndarray, params: dict = PARAM
     return np.clip(mdr, 0.0, 1.0)
 
 
-def severity(loans: pd.DataFrame, hpi_at_default: np.ndarray, params: dict = PARAMS) -> np.ndarray:
+def calculate_loss_severity(loans: pd.DataFrame, hpi_at_default: np.ndarray,
+                            params: dict = PARAMS) -> np.ndarray:
     """Actual loss given a credit event, as a fraction of defaulted UPB, per loan.
 
     hpi_at_default: HPI level (tape date = 1.0) at liquidation, scalar or one per loan.
@@ -118,6 +123,16 @@ def severity(loans: pd.DataFrame, hpi_at_default: np.ndarray, params: dict = PAR
     return np.clip(claim - proceeds - mi, 0.0, None)
 
 
+def calculate_credit_events(performing_balance: np.ndarray, mdr: np.ndarray) -> np.ndarray:
+    """Balance defaulting this month: MDR_t x performing balance (enters the liquidation pipeline)."""
+    return np.asarray(mdr, dtype=float) * np.asarray(performing_balance, dtype=float)
+
+
 def modification_loss(modified_balance: np.ndarray, params: dict = PARAMS) -> np.ndarray:
     """Monthly modification loss ($): interest lost from the rate cut on modified loans."""
     return np.asarray(modified_balance, dtype=float) * params["mod_rate_cut"] / 1200.0
+
+
+# Earlier names, kept so existing code keeps working
+default_rate = calculate_credit_event_rate
+severity = calculate_loss_severity

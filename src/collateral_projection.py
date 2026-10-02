@@ -55,13 +55,14 @@ def scheduled_principal(balance: np.ndarray, coupon: np.ndarray,
     return np.clip(principal, 0.0, b)
 
 
-def project_pool(loans: pd.DataFrame, hpi_path: np.ndarray, rate_path: np.ndarray,
-                 n_months: int) -> pd.DataFrame:
+def project_collateral(loans: pd.DataFrame, hpi_path: np.ndarray, rate_path: np.ndarray,
+                       n_months: int) -> pd.DataFrame:
     """Monthly pool cash flows ($) for one scenario path, with columns COLUMNS.
 
     hpi_path: n_months + 1 points, 1.0 on the tape date. rate_path: n_months mortgage
-    rates in % per year. Uses prepayment.cpr, credit_model.default_rate / severity /
-    modification_loss and their PARAMS.
+    rates in % per year. Uses prepayment.calculate_cpr / calculate_smm / calculate_prepayment
+    and credit_model.calculate_credit_event_rate / calculate_credit_events /
+    calculate_loss_severity / modification_loss, with their PARAMS.
     """
     cparams = credit_model.PARAMS
     lag, mod_share = int(cparams["liq_lag"]), cparams["mod_share"]
@@ -70,8 +71,8 @@ def project_pool(loans: pd.DataFrame, hpi_path: np.ndarray, rate_path: np.ndarra
     bal = loans["Current Balance"].to_numpy(dtype=float)
     coupon = loans["Gross Coupon"].to_numpy(dtype=float)
     rem = loans["Months to Maturity"].to_numpy(dtype=float)
-    smm = prepayment.cpr_to_smm(prepayment.cpr(loans, rate_path[:n_months]))
-    mdr = credit_model.default_rate(loans, hpi[: n_months + 1])
+    smm = prepayment.calculate_smm(prepayment.calculate_cpr(loans, rate_path[:n_months]))
+    mdr = credit_model.calculate_credit_event_rate(loans, hpi[: n_months + 1])
 
     # Loans 60+ dq / bankruptcy / foreclosure on the tape (or unmapped codes) start in
     # the liquidation pipeline and are liquidated halfway through the lag.
@@ -93,12 +94,12 @@ def project_pool(loans: pd.DataFrame, hpi_path: np.ndarray, rate_path: np.ndarra
         begin = perf.sum() + pipe.sum()
         mod_loss = credit_model.modification_loss(modified).sum()
 
-        new_dq = mdr[:, t] * perf
+        new_dq = credit_model.calculate_credit_events(perf, mdr[:, t])
         to_liq = (1.0 - mod_share) * new_dq
         to_mod = new_dq - to_liq
         after_dq = perf - to_liq
         sched = scheduled_principal(after_dq, coupon, rem - t)
-        prepay = smm[:, t] * (after_dq - sched)
+        prepay = prepayment.calculate_prepayment(after_dq, sched, smm[:, t])
         perf_end = after_dq - sched - prepay
 
         with np.errstate(divide="ignore", invalid="ignore"):
@@ -111,7 +112,7 @@ def project_pool(loans: pd.DataFrame, hpi_path: np.ndarray, rate_path: np.ndarra
             liq[:, t + lag] += to_liq
         events = liq[:, t]
         pipe = pipe - events
-        losses = (events * credit_model.severity(loans, hpi[t + 1])).sum()
+        losses = (events * credit_model.calculate_loss_severity(loans, hpi[t + 1])).sum()
         perf = perf_end
 
         rows.append({
@@ -130,6 +131,22 @@ def project_pool(loans: pd.DataFrame, hpi_path: np.ndarray, rate_path: np.ndarra
 
 
 def run_scenarios(loans: pd.DataFrame, scenarios: dict, n_months: int) -> dict:
-    """{name: project_pool(...)} where scenarios = {name: {"hpi": path, "rate": path}}."""
-    return {name: project_pool(loans, s["hpi"], s["rate"], n_months)
+    """{name: project_collateral(...)} where scenarios = {name: {"hpi": path, "rate": path}}."""
+    return {name: project_collateral(loans, s["hpi"], s["rate"], n_months)
             for name, s in scenarios.items()}
+
+
+def placeholder_scenarios(n_months: int = 53) -> dict:
+    """PLACEHOLDER paths until Coco's src/scenarios.py: linear HPI to the end level, flat rate."""
+    paths = {               # (HPI at end, 30y mortgage rate %)
+        "good":     (1.25, 5.00),   # strong economy, lower rates: fast prepay, few losses
+        "base":     (1.15, 6.25),
+        "moderate": (0.90, 5.75),
+        "severe":   (0.75, 5.25),
+    }
+    return {name: {"hpi": np.linspace(1.0, h, n_months + 1), "rate": np.full(n_months, r)}
+            for name, (h, r) in paths.items()}
+
+
+# Earlier name, kept so existing code keeps working
+project_pool = project_collateral

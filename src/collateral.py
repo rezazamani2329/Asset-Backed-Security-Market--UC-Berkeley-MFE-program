@@ -9,6 +9,7 @@ Calibrate on HISTORICAL data (course data / Freddie Single-Family Loan-Level Dat
 then apply to the current STACR / CAS pools. The Bloomberg snapshots alone have too
 little performance history to estimate stress behavior.
 """
-from src.prepayment import cpr, cpr_to_smm  # noqa: F401
-from src.credit_model import default_rate, severity  # noqa: F401
-from src.collateral_projection import project_pool, run_scenarios  # noqa: F401
+from src.prepayment import calculate_cpr, calculate_smm, calculate_prepayment  # noqa: F401
+from src.credit_model import (calculate_credit_event_rate, calculate_credit_events,  # noqa: F401
+                              calculate_loss_severity)
+from src.collateral_projection import project_collateral, run_scenarios  # noqa: F401
