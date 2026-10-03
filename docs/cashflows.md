@@ -42,6 +42,19 @@ Notes on the table:
 - M-2A and M-2B can be exchanged into a combined M-2 (SOFR + 1.30%) and into other MACR classes with different coupon/IO splits (Table 2, p. xii). Cash flows are the same as the underlying M-2A/M-2B.
 - Expected WAL at pricing (10% CPR, no losses, called in Feb 2031): A-1 1.59 yr, M-1 1.75 yr, M-2A 4.11 yr, M-2B 4.79 yr (p. x).
 
+## Current balances (after the Sep 2026 payment, estimated)
+
+The waterfall starts from today's pool ($19.44bn in the Bloomberg tape), so it needs today's tranche balances, not the closing ones. These are estimated by replaying the principal rules above over the 7 payments since closing (March to September 2026), assuming all triggers passed and no losses so far. They sum exactly to today's pool. To be checked against Bloomberg current factors.
+
+| Class | Original ($) | Current ($) | Factor |
+|---|---|---|---|
+| A-1 | 275,900,000 | 203,476,250 | 0.7375 |
+| M-1 | 275,900,000 | 164,129,951 | 0.5949 |
+| M-2A | 37,850,000 | 37,850,000 | 1.0000 |
+| M-2B | 37,850,000 | 37,850,000 | 1.0000 |
+
+A-1 has paid 26.25% on its fixed schedule. M-1 has taken all of the subordinate principal so far. M-2A and M-2B have not been paid yet because the M classes pay sequentially. The full list, including Freddie's pieces, is `CURRENT_BALANCES` in `src/waterfall.py`.
+
 ## Loss allocation rules
 
 **What counts as a loss.** A Credit Event is the first of: short sale, sale of a seriously delinquent note, third-party foreclosure sale, REO disposition, or charge-off (p. 171). The loss is the **actual** net loss: Credit Event UPB + prior principal forgiveness + delinquent accrued interest, minus Net Liquidation Proceeds, which include mortgage insurance proceeds (p. 172, 184). This is an actual-loss deal, not a fixed-severity deal.
@@ -72,7 +85,7 @@ Each month, **Stated Principal** (scheduled principal, prepayments, and non-cred
 - If all three triggers pass: Senior Percentage x Stated Principal + 100% of Recovery Principal.
 - If any trigger fails: 100% of Stated Principal and Recovery Principal. The subordinate bucket gets nothing.
 
-**Senior Percentage** = (A-H + A-1 + A-1H balances) / pool UPB. At closing this is 95.2% (p. 193).
+**Senior Percentage** = (A-H + A-1 + A-1H balances) / pool UPB. At closing this is 96.475% (p. 193).
 **Subordinate Reduction Amount** = total principal minus the Senior Reduction Amount (p. 195).
 
 **Triggers for M-1, M-2A and M-2B** (all must pass):
@@ -83,7 +96,7 @@ Each month, **Stated Principal** (scheduled principal, prepayments, and non-cred
 | Cumulative Net Loss Test | Cumulative net loss / Cut-off Date Balance is at or below a schedule: 0.10% in year 1, rising 0.10% a year to 1.30% from March 2038 | p. 173 |
 | Delinquency Test | 6-month average Distressed Principal Balance (60+ days delinquent, in foreclosure, bankruptcy or REO, or modified in the last 12 months) is below 50% of (Subordinate Percentage x pool UPB minus current Principal Loss Amount) | p. 173-174 |
 
-The Minimum Credit Enhancement Test starts at exactly 4.800% vs a 3.525% threshold, so it passes at closing. It fails if losses eat into the subordinate stack.
+At closing the Subordinate Percentage is exactly 3.525%, so the Minimum Credit Enhancement Test passes with no cushion. While triggers pass, the subordinate tranches get exactly their share of principal, so it stays at about 3.525%. Any loss that hits the B tranches pushes it below 3.525%, the test fails, and all principal goes senior.
 
 **Senior Reduction Amount order** (p. 86):
 1. If the Class A-1 Cumulative Net Loss Test passes, up to the **Class A-1 Reduction Amount** to A-1/A-1H pro rata

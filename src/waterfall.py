@@ -51,6 +51,29 @@ TRANCHES: list[Tranche] = [
 # Offered class -> retained twin that shares its band pro rata.
 PRO_RATA_PAIRS = {"A-1": "A-1H", "M-1": "M-1H", "M-2A": "M-2AH", "M-2B": "M-2BH"}
 
+# Balances after the Sep 2026 Payment Date (7th payment), to start the waterfall
+# from today's pool ($19,443,046,983.78 in the Bloomberg tape; WA loan age 17 vs 10
+# at cut-off). ESTIMATED by replaying the PPM principal rules (docs/cashflows.md):
+# all triggers passing, no losses to date, total principal = cut-off balance minus
+# today's pool. Senior bucket: A-1 band gets its Appendix G schedule (3.75%/month),
+# A-H gets the rest. Subordinate bucket (3.525%) pays the M-1 band first.
+# Sums exactly to CURRENT_POOL_BALANCE. Check against Bloomberg current factors.
+CURRENT_BALANCES = {
+    "A-H":   18_543_464_711.42,
+    "A-1":      203_476_250.00,   # factor 0.737500
+    "A-1H":      10_737_765.47,
+    "M-1":      164_129_951.00,   # factor 0.594889
+    "M-1H":       8_661_398.68,
+    "M-2A":      37_850_000.00,   # factor 1.000000
+    "M-2AH":      2_017_015.00,
+    "M-2B":      37_850_000.00,   # factor 1.000000
+    "M-2BH":      2_017_015.00,
+    "B-1H":     102_515_181.00,
+    "B-2H":     273_373_818.00,
+    "B-3H":      56_953_878.00,
+}
+CURRENT_POOL_BALANCE = 19_443_046_983.78
+
 
 def allocate_losses(tranches: list[Tranche], loss: float) -> list[float]:
     """Write down `loss` from the most junior tranche upward. Return new balances."""
