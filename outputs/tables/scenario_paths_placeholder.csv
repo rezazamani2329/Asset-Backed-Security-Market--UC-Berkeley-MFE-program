@@ -1,0 +1,5 @@
+scenario,hpi_end,mortgage_rate_pct
+good,1.25,5.0
+base,1.15,6.25
+moderate,0.9,5.75
+severe,0.75,5.25

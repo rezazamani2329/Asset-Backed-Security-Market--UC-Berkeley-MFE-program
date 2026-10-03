@@ -26,3 +26,7 @@ docs/reference/final-project-fall-2026.pdf
 
 # --- Shared results: scenario pool cash flows for the waterfall ---
 !outputs/pool_cf_*.parquet
+!outputs/tables/
+!outputs/tables/*.csv
+!outputs/figures/
+!outputs/figures/*.png
