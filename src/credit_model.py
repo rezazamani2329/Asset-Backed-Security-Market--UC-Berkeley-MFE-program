@@ -23,7 +23,7 @@ Severity (actual loss as a fraction of UPB):
 
     loss = UPB * (1 + LIQ_LAG * coupon / 1200 + COSTS)        UPB + missed interest + costs
            - property value * HPI * (1 - REO_DISCOUNT)        distressed sale proceeds
-           - MI proceeds                                     only if original LTV > 80 (CAS)
+           - MI proceeds                                     only if original LTV > 80 (none in STACR DNA1)
 
 PARAMS are FITTED on Freddie Mac Single-Family Loan-Level Dataset history (see
 src/calibration.py, notebooks/05_calibration_results.ipynb):

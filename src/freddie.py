@@ -4,7 +4,7 @@ Files (NOT committed, licensed): data/raw/freddie_sf/sample_orig_YYYY.txt and
 sample_perf_YYYY.txt, pipe-delimited, no header. Column positions follow Freddie's
 "Single-Family Loan-Level Dataset General User Guide" file layout.
 
-Only 30-year fixed-rate loans are kept, to match the STACR / CAS reference pools.
+Only 30-year fixed-rate loans are kept, to match the STACR reference pool.
 compact_panel() writes one small parquet per vintage to data/processed/freddie/.
 """
 from pathlib import Path

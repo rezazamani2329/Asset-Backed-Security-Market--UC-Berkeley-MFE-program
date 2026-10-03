@@ -98,7 +98,7 @@ print("missing FICO / DTI:", o07["fico"].isna().sum(), "/", o07["dti"].isna().su
 # **Q&A · `load_orig`**
 # 
 # **Q: Why drop the 14% of loans that aren't 30-year fixed?**
-# A: STACR DNA1 and CAS R01 are pools of 30-year fixed-rate loans. 15- and 20-year loans prepay faster and default less, and ARMs reset, so mixing them in would bias every fitted parameter.
+# A: STACR DNA1 is a pool of 30-year fixed-rate loans. 15- and 20-year loans prepay faster and default less, and ARMs reset, so mixing them in would bias every fitted parameter.
 # 
 # **Q: What do the occupancy and purpose codes mean?**
 # A: Occupancy: P = primary residence, I = investment property, S = second home. Purpose: P = purchase, C = cash-out refinance, N = no-cash-out (rate/term) refinance. The model uses occupancy (investor ×1.22 default rate); purpose isn't in the model yet but could be added.

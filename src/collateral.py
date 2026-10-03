@@ -6,7 +6,7 @@ The model is split into:
   - src/collateral_projection.py monthly pool table handed to the waterfall
 
 Calibrate on HISTORICAL data (course data / Freddie Single-Family Loan-Level Dataset),
-then apply to the current STACR / CAS pools. The Bloomberg snapshots alone have too
+then apply to the current STACR pool. The Bloomberg snapshots alone have too
 little performance history to estimate stress behavior.
 """
 from src.prepayment import calculate_cpr, calculate_smm, calculate_prepayment  # noqa: F401

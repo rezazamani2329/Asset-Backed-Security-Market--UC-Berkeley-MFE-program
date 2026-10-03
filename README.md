@@ -7,8 +7,7 @@ UC Berkeley MFE · MFE230M Asset Securitization (ABSM) · Fall 2026 · Final Pro
 
 ## Objective
 Analyze and price Freddie Mac STACR 2026-DNA1 (classes A-1, M-1, M-2) from the
-perspective of a consultant advising prospective investors, with Fannie Mae
-CAS 2026-R01 as a comparison deal.
+perspective of a consultant advising prospective investors.
 
 | Class | Amount | Rule 144A CUSIP | Reg S CUSIP |
 |---|---|---|---|
@@ -34,7 +33,6 @@ data/raw → clean.py → collateral.py + scenarios.py → waterfall.py → pric
 Bloomberg loan-level files and course historical data are licensed and must stay
 local. Place them in `data/raw/`:
 - `STACR_2026_DNA1_A1_Loan_Level.xlsx`
-- `CAS_2026_R01_2A1_Loan_level.xlsx`
 - historical performance data for model calibration
 
 ## Setup
