@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# # 03 · Pool projection & scenarios: the handoff to the waterfall
+# # 03_collateral_projection · Pool projection & scenarios: the handoff to the waterfall
 # 
 # **Purpose.** Project the whole STACR reference pool month by month to the Feb 2031 call (53 months) under several scenarios, and produce the table that Smarajit's `src/waterfall.py` consumes. His waterfall only needs this table, not how CPR or defaults were modeled.
 # 
@@ -173,7 +173,7 @@ results = try_run(cp.run_scenarios, pool, scenarios, N_MONTHS)
 # A: The model pulls rates back toward their long-run average since 2000 (around 5.5–6% for mortgages). Starting from 7.28%, that means a gradual decline, which matters a lot for prepayment because the pool's coupon is 6.76%.
 # 
 # **Q: What about the 22-day first month?**
-# A: Coco's month 1 runs from today (Oct 3) to the first payment date (Oct 25). The collateral model applies a full month's prepayment and default rates, which slightly overstates month-1 flows (about 1% of a year's activity). It's small, but worth fixing if Smarajit's waterfall uses exact accrual days.
+# A: Coco's month 1 runs from today (Oct 3) to the first payment date (Oct 25). The collateral model applies a full month's prepayment and default rates, which overstates month-1 flows by about 8 days' worth, roughly 2% of a year's activity. It's small, but worth fixing if Smarajit's waterfall uses exact accrual days.
 
 # ### Figure 3 · Projected reference-pool balance
 
