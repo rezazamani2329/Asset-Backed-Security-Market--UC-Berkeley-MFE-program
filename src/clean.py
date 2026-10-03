@@ -1,4 +1,4 @@
-"""Load and clean Bloomberg loan-level files for the STACR / CAS reference pools.
+"""Load and clean the Bloomberg loan-level file for the STACR 2026-DNA1 reference pool.
 
 Bloomberg exports have a title row (e.g. "STACR 26-DNA1 A1 Mtge") above the header,
 mixed text/number status codes, and a pay-history string per loan.
@@ -12,7 +12,6 @@ PROCESSED = ROOT / "data" / "processed"
 
 FILES = {
     "stacr_dna1": "STACR_2026_DNA1_A1_Loan_Level.xlsx",
-    "cas_r01_g2": "CAS_2026_R01_2A1_Loan_level.xlsx",
 }
 
 KEEP = [

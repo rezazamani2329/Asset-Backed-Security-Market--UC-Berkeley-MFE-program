@@ -179,14 +179,17 @@ def load_scenarios(path: Path = SCENARIO_CSV, n_months: int = None) -> dict:
     if n_months < 1 or actual != n_months or (df.month < 0).any():
         raise ValueError("Scenario horizon does not match requested projection")
     if "date" in df:
-        dates_by_scenario = [pd.to_datetime(g.sort_values("month").date).tolist()
+        # ISO "YYYY-MM-DD" strings compare in date order, so no datetime parsing is needed
+        # (pandas date parsing crashes on some Python 3.14 installs).
+        dates_by_scenario = [g.sort_values("month").date.astype(str).str[:10].tolist()
                              for _, g in df.groupby("scenario")]
         if any(d != dates_by_scenario[0] for d in dates_by_scenario[1:]):
             raise ValueError("Scenario dates must agree")
-        dates = pd.DatetimeIndex(dates_by_scenario[0])
-        if dates.hasnans or not dates.is_monotonic_increasing or dates.has_duplicates:
+        dates = dates_by_scenario[0]
+        iso = pd.Series(dates).str.fullmatch(r"\d{4}-\d{2}-\d{2}").all()
+        if not iso or dates != sorted(set(dates)):
             raise ValueError("Invalid scenario dates")
-        if dates[-1] != pd.Timestamp(CALL_DATE):
+        if dates[-1] != CALL_DATE[:10]:
             raise ValueError("Scenario endpoint must equal call date")
     out = {}
     for name, g in df.groupby("scenario", sort=False):

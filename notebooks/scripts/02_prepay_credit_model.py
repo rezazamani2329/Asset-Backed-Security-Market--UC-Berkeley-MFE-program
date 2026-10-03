@@ -16,7 +16,7 @@
 #    - *Seasoning ramp*: new loans prepay less at first. The data says the ramp is only about 6 months, much faster than PSA's 30.
 # 4. **Mark-to-market LTV** (`credit_model.mark_to_market_ltv`): tape HPI-adjusted LTV ÷ HPI path. Falling home prices raise LTV.
 # 5. **Default rate** (`credit_model.calculate_credit_event_rate`): a proportional hazard. A base rate (0.40% a year of loans starting a default spell) is scaled up by higher MTM LTV (more steeply above 80, where borrowers lose equity), lower FICO, higher DTI, and investor occupancy. Loans 30 days delinquent on the tape get an extra hazard for 12 months.
-# 6. **Severity** (`credit_model.calculate_loss_severity`): STACR is an **actual-loss** deal (PPM p. 172, 184), so there is no fixed severity. Loss = balance + 19 months of missed interest + 10% liquidation costs − distressed sale proceeds (property value × HPI × (1 − 48% discount)) − mortgage insurance (only for LTV > 80, relevant for CAS).
+# 6. **Severity** (`credit_model.calculate_loss_severity`): STACR is an **actual-loss** deal (PPM p. 172, 184), so there is no fixed severity. Loss = balance + 19 months of missed interest + 10% liquidation costs − distressed sale proceeds (property value × HPI × (1 − 48% discount)) − mortgage insurance (only for LTV > 80, so none in STACR DNA1).
 # 7. **Modification loss** (`credit_model.modification_loss`): a modified loan's rate cut is a loss under STACR (PPM p. 84-85).
 # 
 # The scenario paths below are **placeholders** until Coco's `src/scenarios.py` is ready. The model parameters (the `PARAMS` dicts) are **fitted on Freddie Mac loan-level history** in notebook 05.
@@ -280,7 +280,7 @@ for name, hpi in hpi_paths.items():
 # A: STACR is an **actual-loss** deal: tranches are written down by the realized loss on each liquidated loan, not a fixed percentage. Changing severity from about 4% to about 43% (base case) is what moved expected losses from 0.016% to 0.21% of the cut-off balance.
 # 
 # **Q: What would lower severity in practice?**
-# A: Mortgage insurance (only on loans above 80 LTV, so it matters for CAS group 2, not STACR DNA1), short sales instead of REO sales, faster foreclosure timelines (fewer months of missed interest), and rising home prices.
+# A: Mortgage insurance (only on loans above 80 LTV, so not for STACR DNA1, where every loan is at or below 80), short sales instead of REO sales, faster foreclosure timelines (fewer months of missed interest), and rising home prices.
 
 # In[11]:
 

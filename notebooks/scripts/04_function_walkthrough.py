@@ -386,7 +386,7 @@ sev.loc[["0.80", "1.00", "1.10"]]
 # A: With LTV 78 the home is worth only 1.28× the loan (vs 1.54× at LTV 65), so sale proceeds cover less of the balance, and its higher coupon (7.25%) adds more missed interest. Its severity is 55% today vs 41% for `good`. Per 10% price drop, `good`'s severity actually rises slightly more (about 0.080× vs 0.067× the balance), because each percent of a relatively larger home value is more dollars per dollar of loan.
 # 
 # **Q: What does MI do in the formula?**
-# A: For loans with original LTV above 80 (none in STACR DNA1, all of CAS group 2), mortgage insurance pays 18.5% of the claim, lowering severity by about 0.2× the balance.
+# A: For loans with original LTV above 80 (none in STACR DNA1), mortgage insurance pays 18.5% of the claim, lowering severity by about 0.2× the balance.
 
 # ---
 # ## 10 · `modification_loss`: cost of rate cuts

@@ -6,7 +6,7 @@
 # **Purpose.** Replace the placeholder parameters of the prepayment and credit models with values estimated from real mortgage performance, so that the projections in notebooks 02–04 and the tranche analysis rest on data.
 # 
 # **Data (all kept local, never committed).**
-# - **Freddie Mac Single-Family Loan-Level Dataset, sample files**: 50,000 loans per origination year, 2000–2026, with monthly performance through 2026. Only 30-year fixed-rate loans are kept, to match STACR / CAS. Files: `data/raw/freddie_sf/`.
+# - **Freddie Mac Single-Family Loan-Level Dataset, sample files**: 50,000 loans per origination year, 2000–2026, with monthly performance through 2026. Only 30-year fixed-rate loans are kept, to match STACR DNA1. Files: `data/raw/freddie_sf/`.
 # - **Freddie PMMS 30-year rate** (FRED `MORTGAGE30US`): the market rate that drives refinancing incentive.
 # - **FHFA purchase-only national HPI** (FRED `HPIPONM226S`): rolls each loan's original LTV forward to a mark-to-market LTV.
 # 
@@ -72,7 +72,7 @@ print(f"prepay: {r['prepay']['n'].sum():,.0f} loan-months  |  default: {r['defau
 # **Q&A · Building the calibration tables**
 # 
 # **Q: Why only 30-year fixed-rate loans?**
-# A: STACR DNA1 and CAS R01 reference pools are all 30-year fixed-rate loans. ARMs and 15-year loans prepay and default differently, so including them would bias the fit.
+# A: The STACR DNA1 reference pool is all 30-year fixed-rate loans. ARMs and 15-year loans prepay and default differently, so including them would bias the fit.
 # 
 # **Q: Why are COVID forbearance months (Mar 2020 – Dec 2021) left out of the default fit?**
 # A: During forbearance, missed payments were reported as delinquencies, but most of those borrowers resumed paying without a loss. Counting them as defaults would roughly double the fitted default rate (0.81% vs 0.40% a year when they're included) and understate the liquidation share.

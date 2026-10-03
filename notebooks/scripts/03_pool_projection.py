@@ -153,27 +153,27 @@ print(pd.DataFrame({k: {"mortgage rate (%)": v["rate"][0], "HPI at month 53": v[
 results = try_run(cp.run_scenarios, pool, scenarios, N_MONTHS)
 
 
-# **Result · Scenarios.** No `scenarios.csv` from Coco yet, so `get_scenarios` used the **interim paths**, all flat-rate, with home prices growing at a constant monthly rate:
+# **Result · Scenarios (Coco's `scenarios.csv`).** `get_scenarios` found Coco's file in `data/scenarios/`, built by `python -m src.scenarios --download` from FRED data as of 2026-10-03. All four paths start at today's PMMS of **7.28%**:
 # 
-# | scenario | mortgage rate | HPI by 2031 |
-# |---|---|---|
-# | good | 6.28% (−1.0 pp) | +25% |
-# | base | **7.28%** (today) | +13% (≈3% a year) |
-# | moderate | 7.03% (−0.25 pp) | −10% |
-# | severe | 6.78% (−0.5 pp) | −25% |
+# | scenario | how it's built | mortgage rate, month 12 → 53 | HPI by Feb 2031 |
+# |---|---|---|---|
+# | good | 75–85th percentile of 20,000 simulated paths | 6.70% → 5.67% | **+32%** |
+# | base | 45–55th percentile (median) | 6.74% → 5.79% | **+22%** |
+# | moderate | replay of Dec 2005 – May 2010 (10th-percentile window) | 7.14% → 5.90% | **−14%** |
+# | severe | replay of Mar 2007 – Aug 2011 (worst window) | 7.09% → 5.39% | **−21%** |
 # 
-# Unlike the earlier placeholders, the stress paths give only a little rate relief, so stressed borrowers can't simply refinance away.
+# In every path rates drift down toward their 2000–2026 average, so the pool gradually moves into the money. Month 1 is a 22-day stub period (Oct 3 → Oct 25 payment date); the collateral model treats it as a full month.
 
 # **Q&A · Scenarios**
 # 
-# **Q: Why build the interim paths around today's 7.28%?**
-# A: The prepayment model is very sensitive to the gap between the loan coupon (WA 6.76%) and the market rate. Starting from the old 6.25% assumption put the pool in the money and made it prepay at about 21% CPR; at today's rate it prepays at about 8%. Using today's PMMS keeps the projection grounded until Coco's paths arrive.
+# **Q: How did Coco build the paths?**
+# A: She fits a simple time-series model (AR(1) for each of short rate, 2-year and 10-year Treasury, mortgage spread and HPI growth) on monthly FRED data from 2000, simulates 20,000 joint paths by resampling historical shocks in 6-month blocks, and averages the paths in an HPI-percentile band for good and base. Moderate and severe replay actual historical 53-month windows (the 2006–2011 housing bust), re-anchored to today's rates.
 # 
-# **Q: Why do the stress paths cut rates so little?**
-# A: In a recession rates usually fall, but borrowers whose home prices are falling often can't refinance (no equity, tighter credit). The model has no negative-equity block yet, so small rate cuts are a simple way to avoid letting stressed loans refinance away before they can default.
+# **Q: Why do rates fall in every scenario, even base?**
+# A: The model pulls rates back toward their long-run average since 2000 (around 5.5–6% for mortgages). Starting from 7.28%, that means a gradual decline, which matters a lot for prepayment because the pool's coupon is 6.76%.
 # 
-# **Q: How do Coco's scenarios get in?**
-# A: Save her file as `data/scenarios/scenarios.csv` with columns `scenario, month, mortgage_rate, hpi_index` (months 0–53; see `data/scenarios/README.md`). `get_scenarios()` then loads it automatically, and rerunning this notebook and `python -m src.export_results` updates every table and chart.
+# **Q: What about the 22-day first month?**
+# A: Coco's month 1 runs from today (Oct 3) to the first payment date (Oct 25). The collateral model applies a full month's prepayment and default rates, which slightly overstates month-1 flows (about 1% of a year's activity). It's small, but worth fixing if Smarajit's waterfall uses exact accrual days.
 
 # ### Figure 3 · Projected reference-pool balance
 
@@ -186,27 +186,27 @@ if results:
     plt.xlabel("month"); plt.ylabel("pool balance ($bn)"); plt.legend()
 
 
-# **Result · Figure 3 (pool balance).** At today's rates the pool pays down **much more slowly** than under the old placeholders:
+# **Result · Figure 3 (pool balance, Coco's scenarios).**
 # 
 # | | month 12 | month 24 | month 36 | month 53 | half paid down by |
 # |---|---|---|---|---|---|
-# | good | $15.2bn | $12.1bn | $9.9bn | **$7.52bn** | month 37 |
-# | base | $17.6bn | $16.0bn | $14.5bn | **$12.64bn** | not before 2031 |
-# | moderate | $17.3bn | $15.4bn | $13.7bn | **$11.73bn** | not before 2031 |
-# | severe | $16.7bn | $14.5bn | $12.7bn | **$10.52bn** | not before 2031 |
+# | good | $17.1bn | $14.0bn | $10.7bn | **$6.89bn** | month 40 |
+# | base | $17.1bn | $14.2bn | $11.2bn | **$7.40bn** | month 42 |
+# | moderate | $17.7bn | $16.1bn | $14.2bn | **$9.40bn** | month 52 |
+# | severe | $17.6bn | $15.1bn | $11.6bn | **$7.24bn** | month 43 |
 # 
-# Year-1 CPR is about **21% / 8% / 10% / 13%** (good / base / moderate / severe). Only the good path, with a 1 pp rally, gets the pool into the money. In base, two-thirds of the pool is still outstanding at the Feb 2031 call.
+# Prepayment starts slow (year-1 CPR **8–11%**, the pool is out of the money) and speeds up as rates fall: by year 4 CPR is about **24–27%** in every scenario. Moderate pays down slowest because its rates stay near 7.1% for the first two years.
 
 # **Q&A · Figure 3, pool balance**
 # 
-# **Q: Why does the base case pay down so slowly now?**
-# A: At 7.28% the pool's 6.76% average coupon is about 0.5 pp out of the money, so almost nobody gains from refinancing. CPR falls to the turnover level, about 8%, and scheduled principal adds only about 0.1% a month.
+# **Q: Why does the curve bend down later in the projection?**
+# A: Rates in Coco's paths fall below the pool's 6.76% average coupon in years 3–4, so refinancing switches on and CPR rises from about 10% to about 25%.
 # 
-# **Q: Why do the stress paths pay down a bit faster than base?**
-# A: They assume small rate cuts (to 7.03% and 6.78%), which nudge some higher-coupon loans into the money. With most loans still out of the money, the effect is small.
+# **Q: Why does severe end with a smaller pool than moderate?**
+# A: Severe's rates fall further (to 5.4% vs 5.9%), so more borrowers who still have equity refinance late in the horizon, and more loans also leave through liquidation. The model still lets underwater borrowers refinance, which flatters this.
 # 
 # **Q: How does the paydown affect the notes?**
-# A: Slower paydown means longer note lives (higher WAL). Investors earn the spread longer, but the notes are exposed to credit losses for longer. For the first 36 months A-1 still gets its fixed paydown schedule from the senior share; the mezzanine notes amortize sequentially from the subordinate share while the triggers pass.
+# A: Compared with the interim flat-7.28% paths, the notes extend in year 1–2 but pay down faster afterwards. The pool is about $7bn at the 2031 call in good, base and severe, and $9.4bn in moderate. For the first 36 months A-1 gets its fixed paydown schedule from the senior share; the mezzanine notes amortize sequentially from the subordinate share while the triggers pass.
 
 # In[8]:
 
@@ -219,8 +219,8 @@ if results:
     } for name, df in results.items()}))
 
 
-# **Result · Losses vs the tranche stack.** Cumulative losses (good / base / moderate / severe) are **$44.1mm / $53.8mm / $66.5mm / $78.6mm**, or **0.193% / 0.236% / 0.292% / 0.345%** of the $22.78bn cut-off balance. That's higher than with the old 6.25% paths, because slower prepayment leaves more loans in the pool to default.
-# - The first-loss piece **B-3H covers 0–0.25%**: good and base stay inside it (base uses about 94%), while **moderate and severe go into B-2H**, by about $10mm and $22mm.
+# **Result · Losses vs the tranche stack (Coco's scenarios).** Cumulative losses (good / base / moderate / severe) are **$43.9mm / $47.7mm / $65.8mm / $81.6mm**, or **0.193% / 0.210% / 0.289% / 0.358%** of the $22.78bn cut-off balance.
+# - The first-loss piece **B-3H covers 0–0.25%**: good and base stay inside it, while **moderate and severe go into B-2H**, by about $9mm and $25mm.
 # - The offered **M-2B (attaching at 1.90%), M-1 and A-1 still take no write-downs**; the severe loss is about a fifth of M-2B's attachment point.
 # - About $21–24mm of each scenario's loss comes from loans already delinquent on the tape, so it's locked in whatever the scenario.
 
@@ -232,10 +232,10 @@ if results:
 # A: Attachment and detachment points are percentages of the **cut-off** balance ($22.78bn). A tranche is written down only once cumulative losses pass its attachment point. B-3H covers 0–0.25%, B-2H 0.25–1.45%, B-1H 1.45–1.90%, and M-2B starts at 1.90%.
 # 
 # **Q: Why are the offered notes still safe in the severe case?**
-# A: Severe losses are 0.345% of cut-off. They use all of B-3H and about 0.095% (≈$22mm) of B-2H. The offered notes sit behind 1.90% of subordination, about 5.5× the severe loss.
+# A: Severe losses are 0.358% of cut-off. They use all of B-3H and about 0.11% (≈$25mm) of B-2H. The offered notes sit behind 1.90% of subordination, about 5.3× the severe loss.
 # 
-# **Q: Why did losses rise compared with the earlier 6.25% runs?**
-# A: The calibrated model already had 40–55% severity; what changed is prepayment. At 7.28% far fewer loans pay off early, so a larger balance stays in the pool through the stress and more of it defaults and liquidates before the 2031 call.
+# **Q: How do these compare with the interim flat-7.28% paths?**
+# A: Very close in the stress cases (moderate 0.289% vs 0.292%, severe 0.358% vs 0.345%) and a bit lower in base (0.210% vs 0.236%), because Coco's base has stronger house prices (+22% vs +13%) and falling rates that let loans pay off before they can default.
 
 # ## Step 4 · Save the handoff for Smarajit
 
@@ -249,7 +249,7 @@ if results:
     print("saved to", out_dir)
 
 
-# **Result · Saved.** Four files are in `outputs/`: `pool_cf_good.parquet`, `pool_cf_base.parquet`, `pool_cf_moderate.parquet` and `pool_cf_severe.parquet`, each with 53 rows and the 10 agreed columns, built from the interim paths. `python -m src.export_results` writes the same tables as CSV in `outputs/tables/`. These are what Smarajit's waterfall reads.
+# **Result · Saved.** Four files are in `outputs/`: `pool_cf_good.parquet`, `pool_cf_base.parquet`, `pool_cf_moderate.parquet` and `pool_cf_severe.parquet`, each with 53 rows and the 10 agreed columns, now built from Coco's scenarios. `python -m src.export_results` writes the same tables as CSV in `outputs/tables/`. These are what Smarajit's waterfall reads; for discounting and SOFR coupons he should use Coco's `data/scenarios/pricing_rates.csv`.
 
 # **Q&A · Saving the handoff**
 # 
@@ -259,12 +259,12 @@ if results:
 # **Q: How will Smarajit use them?**
 # A: Scheduled principal + prepayments make up the deal's Stated Principal, which the waterfall splits between the senior and subordinate shares. `losses` become tranche write-downs from the bottom up. `modification_losses` reduce junior interest. `distressed_balance` and cumulative losses drive the Delinquency and Cumulative Net Loss tests.
 
-# ## Results and takeaways (fitted parameters, interim scenarios at today's 7.28% PMMS)
+# ## Results and takeaways (fitted parameters, Coco's scenarios)
 # 
 # - **The table is consistent**: the balance identity holds every month, and month 1 starts at today's **$19.44bn**.
-# - **Prepayment is slow at today's rates**: year-1 CPR is about **21% / 8% / 10% / 13%** (good / base / moderate / severe). In base, only $138mm prepays in month 1, and the pool is still **$12.64bn** at the Feb 2031 call.
-# - **Pool runoff to the call**: **$7.52bn / $12.64bn / $11.73bn / $10.52bn**. The offered notes will be outstanding much longer than at the old 6.25% assumption.
+# - **Prepayment starts slow and speeds up**: year-1 CPR is about **8–11%** (the pool is out of the money at 7.28%), rising to about **24–27%** by year 4 as Coco's rates drift down toward 5.4–5.9%.
+# - **Pool runoff to the Feb 2031 call**: **$6.89bn / $7.40bn / $9.40bn / $7.24bn** (good / base / moderate / severe).
 # - **Credit events**: $47.8mm of loans already seriously delinquent liquidate in month 9 (a $21–24mm loss). New defaults start liquidating after the fitted 19-month lag.
-# - **Losses**: **0.193% / 0.236% / 0.292% / 0.345%** of cut-off. Good and base stay inside **B-3H (0–0.25%)**; moderate and severe reach **B-2H**. **A-1, M-1 and M-2 take no write-downs**: M-2B needs cumulative losses above 1.90%, about 5.5× the severe case.
+# - **Losses**: **0.193% / 0.210% / 0.289% / 0.358%** of cut-off. Good and base stay inside **B-3H (0–0.25%)**; moderate and severe reach **B-2H**. **A-1, M-1 and M-2 take no write-downs**: M-2B needs cumulative losses above 1.90%, about 5.3× the severe case.
 # 
-# **What this means and what's next.** The offered notes remain well protected against credit loss, but at today's rates their main risk is **extension**: slow prepayment keeps them outstanding (and exposed) much longer. Next: (1) drop Coco's `scenarios.csv` into `data/scenarios/` and rerun; (2) add a negative-equity block on refinancing; (3) test a harsher severe path (HPI −30% or worse) to see how much stress reaches M-2B.
+# **What this means and what's next.** The offered notes remain well protected against credit loss. Their main risk is timing: slow paydown in the first two years (extension), then faster paydown as rates fall. Next: (1) Smarajit runs the waterfall on these tables, discounting with Coco's `pricing_rates.csv`; (2) handle the 22-day first period exactly; (3) add a negative-equity block on refinancing, which matters for the severe path where rates fall while prices drop.
