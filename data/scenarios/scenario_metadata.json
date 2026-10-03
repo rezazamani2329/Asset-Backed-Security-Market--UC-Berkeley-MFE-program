@@ -1,0 +1,134 @@
+{
+  "config": {
+    "valuation_date": "2026-10-03",
+    "snapshot_as_of": "2026-10-03",
+    "call_date": "2031-02-25",
+    "market_dir": "data/market",
+    "output_dir": "data/scenarios",
+    "calibration_start": "2000-01-01",
+    "n_paths": 20000,
+    "block_months": 6,
+    "seed": 2302026,
+    "scenario_percentile_bands": {
+      "good": [
+        0.75,
+        0.85
+      ],
+      "base": [
+        0.45,
+        0.55
+      ],
+      "moderate": [
+        0.05,
+        0.15
+      ],
+      "severe": [
+        0.0,
+        0.02
+      ]
+    }
+  },
+  "method": "AR1 plus joint residual block bootstrap for base/good; historical replay for moderate/severe; physical measure",
+  "calibration_start": "2000-01-01",
+  "calibration_end": "2026-07-01",
+  "calibration_months": 319,
+  "projection_periods": 53,
+  "sofr_dff_basis_pp": -0.004618421052632021,
+  "floor_hits": {
+    "short_rate": 8376,
+    "treasury2": 2184,
+    "treasury10": 21,
+    "mortgage_spread": 1,
+    "hpi_log_growth": 0
+  },
+  "simulated_observations_per_factor": 1060000,
+  "limits": [
+    "Not an OIS/futures-implied curve or risk-neutral pricing model",
+    "HPI release lag: latest observed growth nowcast to valuation; current LTV anchors HPI=100",
+    "Pre-2018 short rates use DFF plus median overlapping SOFR-DFF basis",
+    "Conditional scenario averages do not equal expected tranche prices",
+    "Moderate/severe historical-window ranks are not scenario probabilities; joint historic rate changes are reanchored to current rates",
+    "Backtest uses current-vintage history and is not a real-time vintage backtest",
+    "Known SOFR resets use published averages; future reset calendar uses US federal holidays plus Good Friday",
+    "Scheduled dates are unadjusted 25ths; payment business-day adjustments belong to waterfall"
+  ],
+  "sources": [
+    {
+      "series": "MORTGAGE30US",
+      "url": "https://fred.stlouisfed.org/series/MORTGAGE30US",
+      "file": "MORTGAGE30US.csv",
+      "sha256": "3ffacebbee5e0acd5f2f7b7effddb2bfbc54b89dd85405475e37545cd3be98db",
+      "snapshot_as_of": "2026-10-03",
+      "first_date": "1971-04-02",
+      "last_date": "2026-10-01",
+      "last_value": 7.28,
+      "observations": 2897
+    },
+    {
+      "series": "HPIPONM226S",
+      "url": "https://fred.stlouisfed.org/series/HPIPONM226S",
+      "file": "HPIPONM226S.csv",
+      "sha256": "9f1092b3ffdcb7c141dda36066643de91658b019cd4fcdc1ecf19d1d7dc1bf5c",
+      "snapshot_as_of": "2026-10-03",
+      "first_date": "1991-01-01",
+      "last_date": "2026-07-01",
+      "last_value": 443.52,
+      "observations": 427
+    },
+    {
+      "series": "DGS2",
+      "url": "https://fred.stlouisfed.org/series/DGS2",
+      "file": "DGS2.csv",
+      "sha256": "fcd8b62db070a929c2e7976735bce774d7303b9603b881387aecb19e93b2394b",
+      "snapshot_as_of": "2026-10-03",
+      "first_date": "1976-06-01",
+      "last_date": "2026-10-01",
+      "last_value": 4.78,
+      "observations": 12581
+    },
+    {
+      "series": "DGS10",
+      "url": "https://fred.stlouisfed.org/series/DGS10",
+      "file": "DGS10.csv",
+      "sha256": "107288572fcfbf2709617bec1e6c10b5e4f6c13b33bc4b5f3e6ef5c7ba5df7c5",
+      "snapshot_as_of": "2026-10-03",
+      "first_date": "1962-01-02",
+      "last_date": "2026-10-01",
+      "last_value": 5.24,
+      "observations": 16173
+    },
+    {
+      "series": "SOFR",
+      "url": "https://fred.stlouisfed.org/series/SOFR",
+      "file": "SOFR.csv",
+      "sha256": "26f1eb2dc8dfa89693ce7a7652fd7cc4f4c2d2e85802b7bcf79044230c4df29d",
+      "snapshot_as_of": "2026-10-03",
+      "first_date": "2018-04-03",
+      "last_date": "2026-10-01",
+      "last_value": 3.87,
+      "observations": 2123
+    },
+    {
+      "series": "SOFR30DAYAVG",
+      "url": "https://fred.stlouisfed.org/series/SOFR30DAYAVG",
+      "file": "SOFR30DAYAVG.csv",
+      "sha256": "fe2fb6e688c748784770d4bbf718ee1c7c321ebe695a784ff19e757024106295",
+      "snapshot_as_of": "2026-10-03",
+      "first_date": "2018-05-02",
+      "last_date": "2026-10-02",
+      "last_value": 3.76116,
+      "observations": 2103
+    },
+    {
+      "series": "DFF",
+      "url": "https://fred.stlouisfed.org/series/DFF",
+      "file": "DFF.csv",
+      "sha256": "440c6c37da4a1c57b895c34b31d899e3066a23cfdd24c470cba1f048ca481ce3",
+      "snapshot_as_of": "2026-10-03",
+      "first_date": "1954-07-01",
+      "last_date": "2026-10-01",
+      "last_value": 3.88,
+      "observations": 26391
+    }
+  ]
+}
