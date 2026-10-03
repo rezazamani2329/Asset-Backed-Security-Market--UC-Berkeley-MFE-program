@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# # 07_calibration · Walkthrough: `src/calibration.py`, fitting the model to Freddie history
+# # 07_calibration_step_by_step · Walkthrough: `src/calibration.py`, fitting the model to Freddie history
 # 
 # **Purpose.** Run each calibration function on its own, see what it produces, and follow how the fitted `PARAMS` in `src/prepayment.py` and `src/credit_model.py` were obtained. `05_calibration_results` runs the whole thing at once and shows the fit charts; this one opens the box.
 # 
