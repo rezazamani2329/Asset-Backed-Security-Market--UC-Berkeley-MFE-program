@@ -8,7 +8,7 @@
 | Scenario summary (CPR, end balance, losses) | `outputs/tables/scenario_summary.csv` |
 | SOFR coupons and discount factors (Coco) | `data/scenarios/pricing_rates.csv` |
 | Scenario paths (Coco) | `data/scenarios/scenarios.csv` |
-| How the numbers are produced | `notebooks/03_pool_projection.ipynb`, `notebooks/08_scenarios_and_export.ipynb` |
+| How the numbers are produced | `notebooks/03_collateral_projection.ipynb`, `notebooks/08_export_results.ipynb` |
 
 Regenerate everything with `python -m src.export_results` after any input changes.
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# # 06 · Walkthrough: `src/freddie.py`, loading the Freddie Mac data
+# # 06_freddie · Walkthrough: `src/freddie.py`, loading the Freddie Mac data
 # 
 # **Purpose.** See, one function at a time, how the raw Freddie Mac Single-Family Loan-Level files become the clean monthly panels that the calibration (notebooks 05 and 07) uses.
 # 

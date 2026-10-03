@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# # 04 · Function walkthrough: the 12 functions, one at a time
+# # 04_model_functions_walkthrough · Function walkthrough: the 12 functions, one at a time
 # 
 # **Purpose.** Run each function of the default/prepay model on its own, with a tiny example you can check by hand, to see exactly what it does before it is used inside the full pool projection (notebook 03).
 # 

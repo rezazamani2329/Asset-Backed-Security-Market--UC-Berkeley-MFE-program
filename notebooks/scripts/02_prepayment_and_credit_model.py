@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# # 02 · Prepayment & credit model: how each loan behaves month by month
+# # 02_prepayment_and_credit_model · Prepayment & credit model: how each loan behaves month by month
 # 
 # **Purpose.** Turn loan characteristics plus a scenario (mortgage-rate path, house-price path) into monthly **prepayment**, **default** and **loss** rates per loan. Notebook 03 aggregates them into the pool cash-flow table for the waterfall.
 # 

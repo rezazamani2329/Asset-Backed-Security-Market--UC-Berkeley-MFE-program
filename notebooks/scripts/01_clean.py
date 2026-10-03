@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# # 01 · Data check: STACR 2026-DNA1 reference pool
+# # 01_clean · Data check: STACR 2026-DNA1 reference pool
 # 
 # **Purpose.** Before modeling, make sure the loan-level data is clean and understand what drives this pool's prepayment and credit risk. This notebook is the input side of the pipeline:
 # 

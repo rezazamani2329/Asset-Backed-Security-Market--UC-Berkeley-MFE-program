@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# # 07 · Walkthrough: `src/calibration.py`, fitting the model to Freddie history
+# # 07_calibration · Walkthrough: `src/calibration.py`, fitting the model to Freddie history
 # 
 # **Purpose.** Run each calibration function on its own, see what it produces, and follow how the fitted `PARAMS` in `src/prepayment.py` and `src/credit_model.py` were obtained. `05_calibration_results` runs the whole thing at once and shows the fit charts; this one opens the box.
 # 
@@ -19,7 +19,7 @@
 # | 10 | `severity_model` / `fit_severity` | the severity formula and its fit |
 # | 11 | `calibrate` | every fitted parameter in one place |
 # 
-# Run `06_freddie_walkthrough` (or `05_calibration_results`) first so the panels in `data/processed/freddie/` exist.
+# Run `06_freddie` (or `05_calibration_results`) first so the panels in `data/processed/freddie/` exist.
 # 
 # **Process.** Calibration turns the Freddie panels into the numbers in `PARAMS`. Each model piece is fitted on the data that best identifies it: prepayment on every current loan-month (S-curve by incentive, age and burnout); defaults on current loan-months with a Poisson GLM; liquidation timing, cure share and rate cuts on post-2013 default spells; severity on 17k liquidations. Sections 1–3 show the building blocks on two vintages; sections 4–11 run all vintages and fit.
 

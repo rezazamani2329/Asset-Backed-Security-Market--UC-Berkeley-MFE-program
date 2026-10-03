@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# # 08 · Coco's scenarios → pool projection → shared results
+# # 08_export_results · Coco's scenarios → pool projection → shared results
 # 
 # **Purpose.** Run the collateral model on the team's official scenarios (Coco's `data/scenarios/scenarios.csv`) and produce everything teammates use: the monthly pool cash flows for Smarajit's waterfall, the summary tables and the figures. It also covers the few functions the other notebooks don't call directly.
 # 
@@ -114,7 +114,7 @@ for a in ax: a.set_xlabel("month"); a.legend()
 plt.tight_layout()
 
 
-# **Result · Scenario paths.** The mortgage rate starts **above** the pool's 6.76% coupon in every scenario (out of the money) and crosses below it after about a year in good and base, and after about two years in moderate. Home prices fan out from +32% to −21%. SOFR stays around 3.4–3.9% in good and base but falls to **0%** in moderate and severe, because those replay 2006–2011, when the Fed cut rates to zero.
+# **Result · Scenario paths.** The mortgage rate starts **above** the pool's 6.76% coupon in every scenario (out of the money) and crosses below it after about a year in good and base, and between years 2 and 3 in moderate. Home prices fan out from +32% to −21%. SOFR stays around 3.4–3.9% in good and base but falls to **0%** in moderate and severe, because those replay 2006–2011, when the Fed cut rates to zero.
 
 # **Q&A · Scenario paths**
 # 
