@@ -1,0 +1,5 @@
+scenario,lower_hpi_percentile,upper_hpi_percentile,selected_paths,terminal_hpi_change_pct,minimum_hpi_change_pct,terminal_mortgage_rate,terminal_sofr_overnight,method,historical_start,historical_end,historical_hpi_percentile,candidate_windows,rate_floor_hits
+good,75.0000000000,85.0000000000,2000.0000000000,32.1150970757,0.0000000000,5.6651870101,3.4221225750,conditional mean from calibrated simulation,,,,,
+base,45.0000000000,55.0000000000,2000.0000000000,22.2538147695,0.0000000000,5.7855314449,3.4066874423,conditional mean from calibrated simulation,,,,,
+moderate,,,,-13.6678756715,-13.7826546072,5.8955000000,0.0000000000,"joint historical stress replay, reanchored to current rates",2005-12-01,2010-05-01,10.0000000000,266.0000000000,18.0000000000
+severe,,,,-21.0953166080,-21.2735617842,5.3940000000,0.0000000000,"joint historical stress replay, reanchored to current rates",2007-03-01,2011-08-01,0.0000000000,266.0000000000,35.0000000000
