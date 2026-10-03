@@ -155,7 +155,7 @@ def placeholder_scenarios(n_months: int = 53) -> dict:
             for name, (h, r) in paths.items()}
 
 
-def load_scenarios(path: Path = SCENARIO_CSV, n_months: int = 53) -> dict:
+def load_scenarios(path: Path = SCENARIO_CSV, n_months: int = None) -> dict:
     """Read scenario paths from a CSV (Coco's file) in the format
 
         scenario,month,mortgage_rate,hpi_index
@@ -167,21 +167,48 @@ def load_scenarios(path: Path = SCENARIO_CSV, n_months: int = 53) -> dict:
     months 1..n_months; hpi_index can be on any base and is rescaled to 1.0 at month 0.
     """
     df = pd.read_csv(path).sort_values(["scenario", "month"])
+    if df.empty or df.duplicated(["scenario", "month"]).any():
+        raise ValueError("Empty scenarios or duplicate scenario/month rows")
+    if not set(df.scenario).issubset({"good", "base", "moderate", "severe"}):
+        raise ValueError("Expected good, base, moderate, severe scenarios")
+    if not np.isfinite(df.month).all() or not (df.month == df.month.astype(int)).all():
+        raise ValueError("Months must be finite integers")
+    actual = int(df.month.max())
+    if n_months is None:
+        n_months = actual
+    if n_months < 1 or actual != n_months or (df.month < 0).any():
+        raise ValueError("Scenario horizon does not match requested projection")
+    if "date" in df:
+        dates_by_scenario = [pd.to_datetime(g.sort_values("month").date).tolist()
+                             for _, g in df.groupby("scenario")]
+        if any(d != dates_by_scenario[0] for d in dates_by_scenario[1:]):
+            raise ValueError("Scenario dates must agree")
+        dates = pd.DatetimeIndex(dates_by_scenario[0])
+        if dates.hasnans or not dates.is_monotonic_increasing or dates.has_duplicates:
+            raise ValueError("Invalid scenario dates")
+        if dates[-1] != pd.Timestamp(CALL_DATE):
+            raise ValueError("Scenario endpoint must equal call date")
     out = {}
     for name, g in df.groupby("scenario", sort=False):
         g = g.set_index("month").reindex(range(n_months + 1))
         if g[["mortgage_rate", "hpi_index"]].isna().any().any():
             raise ValueError(f"scenario {name!r} needs months 0..{n_months} with no gaps")
+        values = g[["mortgage_rate", "hpi_index"]].to_numpy(dtype=float)
+        if not np.isfinite(values).all() or (values <= 0).any():
+            raise ValueError("Mortgage rates and HPI must be finite and positive")
         hpi = g["hpi_index"].to_numpy(dtype=float)
         out[name] = {"hpi": hpi / hpi[0], "rate": g["mortgage_rate"].to_numpy(dtype=float)[1:]}
     return out
 
 
-def get_scenarios(n_months: int = 53) -> dict:
+def get_scenarios(n_months: int = None) -> dict:
     """Coco's scenarios from data/scenarios/scenarios.csv if present, else the interim paths."""
     if SCENARIO_CSV.exists():
-        return load_scenarios(SCENARIO_CSV, n_months)
-    return placeholder_scenarios(n_months)
+        paths = load_scenarios(SCENARIO_CSV, n_months)
+        if set(paths) != {"good", "base", "moderate", "severe"}:
+            raise ValueError("Production scenario file requires all four scenarios")
+        return paths
+    return placeholder_scenarios(53 if n_months is None else n_months)
 
 
 # Earlier name, kept so existing code keeps working

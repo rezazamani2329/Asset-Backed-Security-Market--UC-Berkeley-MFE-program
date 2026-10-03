@@ -1,0 +1,17 @@
+{
+  "valuation_date": "2026-10-03",
+  "snapshot_as_of": "2026-10-03",
+  "call_date": "2031-02-25",
+  "market_dir": "data/market",
+  "output_dir": "data/scenarios",
+  "calibration_start": "2000-01-01",
+  "n_paths": 20000,
+  "block_months": 6,
+  "seed": 2302026,
+  "scenario_percentile_bands": {
+    "good": [0.75, 0.85],
+    "base": [0.45, 0.55],
+    "moderate": [0.05, 0.15],
+    "severe": [0.0, 0.02]
+  }
+}

@@ -31,7 +31,9 @@ PLACEHOLDER = {
 
 
 def scenario_tables(pool: pd.DataFrame) -> None:
-    res = cp.run_scenarios(pool, cp.placeholder_scenarios(N_MONTHS), N_MONTHS)
+    paths = cp.get_scenarios(None)
+    n_months = len(next(iter(paths.values()))["rate"])
+    res = cp.run_scenarios(pool, paths, n_months)
     rows = {}
     for name, df in res.items():
         df.to_csv(TABLES / f"pool_cf_{name}.csv", index=False)
@@ -50,10 +52,9 @@ def scenario_tables(pool: pd.DataFrame) -> None:
             "peak_distressed_balance_mm": df.distressed_balance.max() / 1e6,
         }
     pd.DataFrame(rows).T.rename_axis("scenario").round(4).to_csv(TABLES / "scenario_summary.csv")
-    paths = cp.placeholder_scenarios(N_MONTHS)
     pd.DataFrame({"scenario": list(paths), "hpi_end": [p["hpi"][-1] for p in paths.values()],
                   "mortgage_rate_pct": [p["rate"][0] for p in paths.values()]}).to_csv(
-        TABLES / "scenario_paths_placeholder.csv", index=False)
+        TABLES / "scenario_paths_used.csv", index=False)
 
 
 def params_table() -> None:
