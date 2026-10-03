@@ -64,3 +64,14 @@ def test_good_scenario_prepays_faster_and_loses_less():
     res = run_scenarios(toy_pool(), placeholder_scenarios(24), 24)
     assert res["good"]["prepayments"].sum() > res["base"]["prepayments"].sum()
     assert res["good"]["losses"].sum() <= res["base"]["losses"].sum()
+
+
+def test_load_scenarios_reads_coco_format(tmp_path):
+    from src.collateral_projection import load_scenarios
+    n = 3
+    rows = [("base", m, 7.0 + 0.1 * m, 200.0 * (1 + 0.01 * m)) for m in range(n + 1)]
+    f = tmp_path / "s.csv"
+    pd.DataFrame(rows, columns=["scenario", "month", "mortgage_rate", "hpi_index"]).to_csv(f, index=False)
+    s = load_scenarios(f, n)["base"]
+    assert s["hpi"][0] == pytest.approx(1.0) and len(s["hpi"]) == n + 1
+    assert s["rate"] == pytest.approx([7.1, 7.2, 7.3])

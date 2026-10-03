@@ -18,6 +18,8 @@ Design decisions to make:
     the $22.78bn cut-off (64,434 loans). Start from today and use the 22.78bn only for
     deal ratios (Senior Percentage, cumulative net loss tests).
 """
+from pathlib import Path
+
 import numpy as np
 import pandas as pd
 
@@ -136,16 +138,50 @@ def run_scenarios(loans: pd.DataFrame, scenarios: dict, n_months: int) -> dict:
             for name, s in scenarios.items()}
 
 
+SCENARIO_CSV = Path(__file__).resolve().parents[1] / "data" / "scenarios" / "scenarios.csv"
+PMMS_TODAY = 7.28   # Freddie PMMS 30y, Oct 2026 (FRED MORTGAGE30US); interim base rate
+
+
 def placeholder_scenarios(n_months: int = 53) -> dict:
-    """PLACEHOLDER paths until Coco's src/scenarios.py: linear HPI to the end level, flat rate."""
-    paths = {               # (HPI at end, 30y mortgage rate %)
-        "good":     (1.25, 5.00),   # strong economy, lower rates: fast prepay, few losses
-        "base":     (1.15, 6.25),
-        "moderate": (0.90, 5.75),
-        "severe":   (0.75, 5.25),
+    """INTERIM paths until Coco's scenario file arrives: flat mortgage rate, HPI growing at
+    a constant monthly rate to its end level. Base starts from today's PMMS."""
+    paths = {               # (HPI at end of horizon, 30y mortgage rate %)
+        "good":     (1.25, PMMS_TODAY - 1.00),   # rally and strong prices: fast prepay, few losses
+        "base":     (1.13, PMMS_TODAY),          # rates stay put, HPI about +3% a year
+        "moderate": (0.90, PMMS_TODAY - 0.25),   # mild recession: prices -10%, little rate relief
+        "severe":   (0.75, PMMS_TODAY - 0.50),   # deep recession: prices -25%, rates fall only a bit
     }
-    return {name: {"hpi": np.linspace(1.0, h, n_months + 1), "rate": np.full(n_months, r)}
+    return {name: {"hpi": np.geomspace(1.0, h, n_months + 1), "rate": np.full(n_months, r)}
             for name, (h, r) in paths.items()}
+
+
+def load_scenarios(path: Path = SCENARIO_CSV, n_months: int = 53) -> dict:
+    """Read scenario paths from a CSV (Coco's file) in the format
+
+        scenario,month,mortgage_rate,hpi_index
+        base,0,7.28,100.0
+        base,1,7.25,100.3
+        ...
+
+    month runs 0..n_months; mortgage_rate is the 30y market rate in % (PMMS-type), used for
+    months 1..n_months; hpi_index can be on any base and is rescaled to 1.0 at month 0.
+    """
+    df = pd.read_csv(path).sort_values(["scenario", "month"])
+    out = {}
+    for name, g in df.groupby("scenario", sort=False):
+        g = g.set_index("month").reindex(range(n_months + 1))
+        if g[["mortgage_rate", "hpi_index"]].isna().any().any():
+            raise ValueError(f"scenario {name!r} needs months 0..{n_months} with no gaps")
+        hpi = g["hpi_index"].to_numpy(dtype=float)
+        out[name] = {"hpi": hpi / hpi[0], "rate": g["mortgage_rate"].to_numpy(dtype=float)[1:]}
+    return out
+
+
+def get_scenarios(n_months: int = 53) -> dict:
+    """Coco's scenarios from data/scenarios/scenarios.csv if present, else the interim paths."""
+    if SCENARIO_CSV.exists():
+        return load_scenarios(SCENARIO_CSV, n_months)
+    return placeholder_scenarios(n_months)
 
 
 # Earlier name, kept so existing code keeps working
