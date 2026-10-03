@@ -19,3 +19,7 @@ __pycache__/
 outputs/*
 !outputs/.gitkeep
 .DS_Store
+
+# --- Course handout: keep local ---
+docs/reference/final-project-fall-2026.pdf
+.virtual_documents/
