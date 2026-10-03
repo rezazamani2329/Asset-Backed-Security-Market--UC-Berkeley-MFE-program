@@ -25,26 +25,32 @@ Severity (actual loss as a fraction of UPB):
            - property value * HPI * (1 - REO_DISCOUNT)        distressed sale proceeds
            - MI proceeds                                     only if original LTV > 80 (CAS)
 
-ALL PARAMS ARE PLACEHOLDERS until calibrated (docs/reza_plan.md, Step 2).
+PARAMS are FITTED on Freddie Mac Single-Family Loan-Level Dataset history (see
+src/calibration.py, notebooks/05_calibration_results.ipynb):
+  - default hazard: Poisson GLM on 38mm loan-months of current loans and 22.6k default
+    spells, mark-to-market LTV from the FHFA HPI; base level for post-2008 vintages;
+    COVID forbearance months (2020-03 to 2021-12) excluded
+  - liquidation lag, mod share, rate cut: default spells starting 2013 or later
+  - severity: costs and MI observed; distressed-sale discount fitted to 17k liquidations
 """
 import numpy as np
 import pandas as pd
 
-PARAMS = {
-    "base_cdr": 0.0020,        # annual CDR at MTM LTV 80, FICO 750, DTI 38   PLACEHOLDER
-    "b_ltv_low": 0.04,         # log-hazard per LTV point below 80            PLACEHOLDER
-    "b_ltv_high": 0.10,        # log-hazard per LTV point above 80            PLACEHOLDER
-    "b_fico": 0.012,           # log-hazard per FICO point (higher = safer)   PLACEHOLDER
-    "b_dti": 0.02,             # log-hazard per DTI point                     PLACEHOLDER
-    "investor_mult": 1.5,      # investment property multiplier               PLACEHOLDER
-    "dq30_extra_mdr": 0.01,    # extra monthly hazard for loans 30 dq on tape PLACEHOLDER
-    "dq30_months": 12,         # ...for this many months                      PLACEHOLDER
-    "liq_lag": 12,             # months from default to credit event          PLACEHOLDER
-    "costs": 0.10,             # foreclosure / REO costs, fraction of UPB     PLACEHOLDER
-    "reo_discount": 0.20,      # distressed sale discount to market value     PLACEHOLDER
-    "mi_coverage": 0.25,       # MI pays this share of the claim if LTV > 80  PLACEHOLDER
-    "mod_share": 0.25,         # share of new defaults modified, not sold     PLACEHOLDER
-    "mod_rate_cut": 2.0,       # coupon cut on modified loans, pp             PLACEHOLDER
+PARAMS = {                     # FITTED, notebooks/05_calibration_results.ipynb
+    "base_cdr": 0.0040,        # annual default-spell rate at MTM LTV 80, FICO 750, DTI 38
+    "b_ltv_low": 0.021,        # log-hazard per LTV point below 80
+    "b_ltv_high": 0.040,       # log-hazard per LTV point above 80
+    "b_fico": 0.0091,          # log-hazard per FICO point (higher = safer)
+    "b_dti": 0.0227,           # log-hazard per DTI point
+    "investor_mult": 1.22,     # investment property multiplier
+    "dq30_extra_mdr": 0.0228,  # extra monthly hazard for loans 30 dq on tape (24% roll in 12m)
+    "dq30_months": 12,         # ...for this many months
+    "liq_lag": 19,             # months from first missed payment to credit event (median)
+    "costs": 0.100,            # liquidation expenses, fraction of UPB
+    "reo_discount": 0.480,     # distressed sale vs HPI-indexed value (fitted to severities)
+    "mi_coverage": 0.185,      # MI recoveries / claim, loans with MI
+    "mod_share": 0.570,        # share of default spells NOT liquidated (cure, mod, payoff)
+    "mod_rate_cut": 0.57,      # effective coupon cut across those (0.88pp x 37% modified / 57%)
 }
 
 

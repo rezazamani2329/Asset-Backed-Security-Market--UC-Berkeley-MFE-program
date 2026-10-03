@@ -14,20 +14,21 @@ Model (per loan, per month t):
 
 TURNOVER is the floor from home sales when there is no refi incentive.
 
-PARAMS are PLACEHOLDERS until calibrated on historical data (docs/reza_plan.md, Step 2).
-Rough check: the pool paid down from $22.78bn (Feb 2026) to $19.44bn on the tape, which
-is roughly a 20-25% CPR, and these values give about that at a 6.25% market rate.
+PARAMS are FITTED on Freddie Mac Single-Family Loan-Level Dataset history (30y fixed,
+vintages 2000-2026, about 48mm loan-months) against the PMMS 30y rate, by weighted least
+squares on observed SMM by (incentive, age, burnout) bucket. See src/calibration.py and
+notebooks/05_calibration_results.ipynb (weighted R^2 = 0.91).
 """
 import numpy as np
 import pandas as pd
 
-PARAMS = {
-    "turnover": 0.06,      # CPR from home sales, no incentive          PLACEHOLDER
-    "refi_max": 0.55,      # extra CPR when deep in the money            PLACEHOLDER
-    "midpoint": 0.75,      # incentive (pp) at half of refi_max          PLACEHOLDER
-    "slope": 3.5,          # steepness of the S-curve, per pp            PLACEHOLDER
-    "burnout": 0.02,       # decay per pp-month of past incentive        PLACEHOLDER
-    "ramp_months": 30,     # seasoning ramp length (PSA uses 30)         PLACEHOLDER
+PARAMS = {                 # FITTED, notebooks/05_calibration_results.ipynb
+    "turnover": 0.055,     # CPR from home sales, no incentive
+    "refi_max": 0.414,     # extra CPR when deep in the money
+    "midpoint": 0.714,     # incentive (pp vs PMMS) at half of refi_max
+    "slope": 2.736,        # steepness of the S-curve, per pp
+    "burnout": 0.0076,     # decay per pp-month of past incentive
+    "ramp_months": 6.2,    # seasoning ramp length (much faster than PSA's 30)
 }
 
 
