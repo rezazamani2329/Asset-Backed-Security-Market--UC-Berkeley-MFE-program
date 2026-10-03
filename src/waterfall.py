@@ -1,37 +1,51 @@
-"""Allocate reference-pool principal and losses to the tranches.
+"""STACR 2026-DNA1 tranche waterfall primitives and monthly engine.
 
-TRANCHES below is filled from the PPM reference tranche table (Table 3).
-The offered classes (A-1, M-1, M-2) are only part of the structure;
-Freddie Mac retains other pieces (senior, vertical slice, subordinate).
+The implementation separates immutable tranche terms from monthly balances.  It
+implements the deal's ordinary loss/write-up order, offered/H pro-rata pairs,
+trigger gate, senior/subordinate principal buckets, A-1 scheduled reduction and
+the February 2031 call.  Modification-loss priority and supplemental reduction
+remain explicit unsupported inputs until their component data is available.
 
-Rules to extract from the offering circular:
-  - Loss allocation order (bottom up?)
-  - Principal allocation: sequential vs. pro rata; triggers (minimum credit
-    enhancement test, delinquency test) that switch between them
-  - Clean-up call / optional redemption
+Sources: ``docs/cashflows.md`` and the cited PPM pages in that document.
 """
-from dataclasses import dataclass
+from __future__ import annotations
+
+from dataclasses import dataclass, replace
+from typing import Iterable, Mapping, Sequence
+
+import numpy as np
+import pandas as pd
+
+
+CUTOFF_BALANCE = 22_781_151_551.84
+A1_CNL_LIMIT = 0.01
+MIN_SUBORDINATE_PCT = 0.03525
+CALL_DATE = pd.Timestamp("2031-02-25")
 
 
 @dataclass
 class Tranche:
+    """One reference tranche or note class.
+
+    ``balance`` is mutable state supplied for the valuation date.  For a
+    closing-date run it equals ``original_balance``.  For a current valuation,
+    current class factors must be used instead of silently scaling the stack.
+    """
+
     name: str
     balance: float
-    offered: bool          # sold to investors vs. retained by Freddie Mac
+    offered: bool
     spread_bps: float = 0.0
+    original_balance: float | None = None
+    cumulative_writedown: float = 0.0
 
+    def __post_init__(self) -> None:
+        if self.original_balance is None:
+            self.original_balance = float(self.balance)
+        for field in ("balance", "original_balance", "cumulative_writedown"):
+            if getattr(self, field) < -1e-8:
+                raise ValueError(f"{self.name}: {field} cannot be negative")
 
-# Ordered SENIOR -> JUNIOR. Source: STACR 2026-DNA1 PPM, Table 3 (p. 2) and Table 1 (p. x).
-# Balances are initial Class Notional Amounts; they sum to the Cut-off Date Balance.
-# See docs/cashflows.md for attach/detach points and the full allocation rules.
-#
-# IMPORTANT: each offered class and its "H" twin (A-1/A-1H, M-1/M-1H, M-2A/M-2AH,
-# M-2B/M-2BH) share one attach/detach band and take write-downs, write-ups and
-# principal PRO RATA (PPM p. 82-88). Do not write them down one after the other.
-# A-H only absorbs certain modification-related losses (PPM p. 82).
-# B-1H and B-2H spreads are "deemed" coupons used only for modification loss
-# allocation; nobody is paid on them.
-CUTOFF_BALANCE = 22_781_151_551.84
 
 TRANCHES: list[Tranche] = [
     Tranche("A-H",   21_687_655_280.84, offered=False),
@@ -48,8 +62,95 @@ TRANCHES: list[Tranche] = [
     Tranche("B-3H",      56_953_878.00, offered=False),
 ]
 
-# Offered class -> retained twin that shares its band pro rata.
-PRO_RATA_PAIRS = {"A-1": "A-1H", "M-1": "M-1H", "M-2A": "M-2AH", "M-2B": "M-2BH"}
+PRO_RATA_PAIRS = {
+    "A-1": "A-1H", "M-1": "M-1H", "M-2A": "M-2AH", "M-2B": "M-2BH"
+}
+PAIR_BY_MEMBER = {member: pair for pair in PRO_RATA_PAIRS.items() for member in pair}
+
+# Ordinary losses exclude A-H.  The PPM permits A-H only for certain
+# modification-related losses, which are deliberately not folded into this path.
+LOSS_BANDS: tuple[tuple[str, ...], ...] = (
+    ("B-3H",), ("B-2H",), ("B-1H",), ("M-2B", "M-2BH"),
+    ("M-2A", "M-2AH"), ("M-1", "M-1H"), ("A-1", "A-1H"),
+)
+WRITEUP_BANDS: tuple[tuple[str, ...], ...] = (
+    ("A-H",), ("A-1", "A-1H"), ("M-1", "M-1H"),
+    ("M-2A", "M-2AH"), ("M-2B", "M-2BH"),
+    ("B-1H",), ("B-2H",), ("B-3H",),
+)
+SUBORDINATE_PRINCIPAL_BANDS: tuple[tuple[str, ...], ...] = (
+    ("M-1", "M-1H"), ("M-2A", "M-2AH"), ("M-2B", "M-2BH"),
+    ("B-1H",), ("B-2H",), ("B-3H",), ("A-1", "A-1H"), ("A-H",),
+)
+SENIOR_PRINCIPAL_BANDS: tuple[tuple[str, ...], ...] = (
+    ("A-H",), ("A-1", "A-1H"), ("M-1", "M-1H"),
+    ("M-2A", "M-2AH"), ("M-2B", "M-2BH"),
+    ("B-1H",), ("B-2H",), ("B-3H",),
+)
+
+
+def copy_tranches(tranches: Sequence[Tranche]) -> list[Tranche]:
+    return [replace(t) for t in tranches]
+
+
+def current_tranches() -> list[Tranche]:
+    """Return the estimated post-September-2026 tranche state.
+
+    Current balances are supplied by the team handoff and retain the original
+    legal balances for A-1 scheduling and loss-history caps.
+    """
+    return [replace(t, balance=CURRENT_BALANCES[t.name]) for t in TRANCHES]
+
+
+def _index(tranches: Sequence[Tranche]) -> dict[str, int]:
+    names = [t.name for t in tranches]
+    if len(names) != len(set(names)):
+        raise ValueError("Tranche names must be unique")
+    return {name: i for i, name in enumerate(names)}
+
+
+def _validate_amount(amount: float, label: str) -> float:
+    value = float(amount)
+    if not np.isfinite(value) or value < -1e-8:
+        raise ValueError(f"{label} must be finite and non-negative")
+    return max(value, 0.0)
+
+
+def _deal_bands_or_generic(
+    tranches: Sequence[Tranche], deal_bands: Sequence[tuple[str, ...]], *, reverse: bool
+) -> tuple[tuple[str, ...], ...]:
+    names = set(_index(tranches))
+    required = {name for band in deal_bands for name in band}
+    if required.issubset(names):
+        return tuple(deal_bands)
+    ordered = [t.name for t in tranches]
+    if reverse:
+        ordered.reverse()
+    return tuple((name,) for name in ordered)
+
+
+def _allocate_reduction(
+    tranches: Sequence[Tranche], amount: float, bands: Sequence[tuple[str, ...]]
+) -> tuple[list[float], list[float], float]:
+    """Reduce balances through ordered bands, pro rata inside each band."""
+    remaining = _validate_amount(amount, "amount")
+    balances = [float(t.balance) for t in tranches]
+    allocated = [0.0] * len(tranches)
+    by_name = _index(tranches)
+    for band in bands:
+        ids = [by_name[name] for name in band if name in by_name]
+        capacity = sum(balances[i] for i in ids)
+        take = min(remaining, capacity)
+        if take > 0 and capacity > 0:
+            for i in ids:
+                share = take * balances[i] / capacity
+                balances[i] -= share
+                allocated[i] += share
+        remaining -= take
+        if remaining <= 1e-7:
+            remaining = 0.0
+            break
+    return balances, allocated, remaining
 
 # Balances after the Sep 2026 Payment Date (7th payment), to start the waterfall
 # from today's pool ($19,443,046,983.78 in the Bloomberg tape; WA loan age 17 vs 10
@@ -76,19 +177,321 @@ CURRENT_POOL_BALANCE = 19_443_046_983.78
 
 
 def allocate_losses(tranches: list[Tranche], loss: float) -> list[float]:
-    """Write down `loss` from the most junior tranche upward. Return new balances."""
-    raise NotImplementedError
+    """Return balances after ordinary losses are allocated bottom-up.
 
-
-def allocate_principal(tranches: list[Tranche], principal: float,
-                       triggers_pass: bool) -> list[float]:
-    """Distribute principal per the deal's rules. Return principal paid to each tranche."""
-    raise NotImplementedError
-
-
-def run(tranches: list[Tranche], pool_cf) -> dict:
-    """Run a pool cash-flow projection through the waterfall.
-
-    Returns {tranche_name: DataFrame(month, balance, principal, writedown, interest)}.
+    Real STACR offered/H pairs are treated as one band and share the write-down
+    pro rata.  A generic senior-to-junior list is supported for toy tests.
+    Inputs are not mutated.
     """
-    raise NotImplementedError
+    bands = _deal_bands_or_generic(tranches, LOSS_BANDS, reverse=True)
+    balances, _, excess = _allocate_reduction(tranches, loss, bands)
+    if excess > 1e-6:
+        raise ValueError(f"Ordinary loss exceeds eligible tranche capacity by {excess:,.2f}")
+    return balances
+
+
+def allocate_writeups(tranches: list[Tranche], recovery: float) -> tuple[list[float], list[float], float]:
+    """Restore prior write-downs top-down, capped by each class's loss history.
+
+    Returns ``(new_balances, writeups, unused_recovery)``.  The caller supplies
+    cumulative write-down state; recovery that exceeds prior write-downs remains
+    unused rather than inflating a class above its original/current entitlement.
+    """
+    remaining = _validate_amount(recovery, "recovery")
+    balances = [float(t.balance) for t in tranches]
+    writeups = [0.0] * len(tranches)
+    by_name = _index(tranches)
+    bands = _deal_bands_or_generic(tranches, WRITEUP_BANDS, reverse=False)
+    for band in bands:
+        ids = [by_name[name] for name in band if name in by_name]
+        capacity = sum(float(tranches[i].cumulative_writedown) for i in ids)
+        give = min(remaining, capacity)
+        if give > 0 and capacity > 0:
+            for i in ids:
+                share = give * tranches[i].cumulative_writedown / capacity
+                balances[i] += share
+                writeups[i] += share
+        remaining -= give
+        if remaining <= 1e-7:
+            remaining = 0.0
+            break
+    return balances, writeups, remaining
+
+
+def _allocate_principal_bands(
+    tranches: Sequence[Tranche], amount: float, bands: Sequence[tuple[str, ...]]
+) -> tuple[list[float], float]:
+    _, paid, remaining = _allocate_reduction(tranches, amount, bands)
+    return paid, remaining
+
+
+def allocate_principal(
+    tranches: list[Tranche], principal: float, triggers_pass: bool,
+    *, pool_balance: float | None = None, recovery_principal: float = 0.0,
+) -> list[float]:
+    """Allocate principal using the senior/subordinate trigger gate.
+
+    When ``pool_balance`` is supplied, the senior percentage is calculated from
+    A-H and the A-1 pair.  If triggers fail, all principal is senior.  This
+    primitive excludes A-1 scheduled/supplemental reductions; ``run`` applies
+    the scheduled A-1 amount before the remaining senior bucket.
+    """
+    stated = _validate_amount(principal, "principal")
+    recovery = _validate_amount(recovery_principal, "recovery_principal")
+    by_name = _index(tranches)
+    real_deal = {"A-H", "A-1", "A-1H"}.issubset(by_name)
+    if not real_deal:
+        bands = tuple((t.name,) for t in (tranches if not triggers_pass else reversed(tranches)))
+        paid, excess = _allocate_principal_bands(tranches, stated + recovery, bands)
+        if excess > 1e-6:
+            raise ValueError("Principal exceeds outstanding tranche balance")
+        return paid
+
+    if pool_balance is None or pool_balance <= 0:
+        raise ValueError("pool_balance is required for the STACR principal split")
+    # The PPM Senior Percentage includes A-H and the A-1/A-1H band.
+    # At closing it is 96.475%, leaving the 3.525% subordinate percentage.
+    senior_balance = sum(tranches[by_name[n]].balance for n in ("A-H", "A-1", "A-1H"))
+    senior_pct = min(max(senior_balance / float(pool_balance), 0.0), 1.0)
+    senior_amount = stated + recovery if not triggers_pass else senior_pct * stated + recovery
+    subordinate_amount = stated + recovery - senior_amount
+
+    senior_paid, senior_excess = _allocate_principal_bands(
+        tranches, senior_amount, SENIOR_PRINCIPAL_BANDS
+    )
+    interim = [replace(t, balance=t.balance - senior_paid[i]) for i, t in enumerate(tranches)]
+    sub_paid, sub_excess = _allocate_principal_bands(
+        interim, subordinate_amount, SUBORDINATE_PRINCIPAL_BANDS
+    )
+    if senior_excess + sub_excess > 1e-5:
+        raise ValueError("Principal exceeds outstanding tranche balance")
+    return [a + b for a, b in zip(senior_paid, sub_paid)]
+
+
+def cumulative_loss_limit(payment_number: int) -> float:
+    """PPM cumulative-net-loss schedule as a fraction of cut-off balance."""
+    if payment_number < 1:
+        raise ValueError("payment_number must be positive")
+    # 0.10% in year 1, +0.10% each deal year, capped at 1.30%.
+    deal_year = (payment_number - 1) // 12 + 1
+    return min(deal_year * 0.001, 0.013)
+
+
+def trigger_results(
+    tranches: Sequence[Tranche], pool_balance: float, cumulative_net_loss: float,
+    distressed_history: Sequence[float], current_principal_loss: float,
+    payment_number: int,
+) -> dict[str, bool | float]:
+    """Calculate the three subordinate-principal tests and A-1 CNL test."""
+    by_name = _index(tranches)
+    senior = sum(tranches[by_name[n]].balance for n in ("A-H", "A-1", "A-1H"))
+    if pool_balance <= 0:
+        raise ValueError("pool_balance must be positive")
+    subordinate_pct = max(0.0, 1.0 - senior / pool_balance)
+    history = list(distressed_history)[-6:]
+    avg_distressed = float(np.mean(history)) if history else 0.0
+    delinquency_threshold = 0.5 * max(subordinate_pct * pool_balance - current_principal_loss, 0.0)
+    minimum_ce = subordinate_pct + 1e-12 >= MIN_SUBORDINATE_PCT
+    cnl = cumulative_net_loss / CUTOFF_BALANCE <= cumulative_loss_limit(payment_number) + 1e-12
+    delinquency = avg_distressed < delinquency_threshold if delinquency_threshold > 0 else avg_distressed == 0
+    return {
+        "minimum_ce": minimum_ce,
+        "cumulative_loss": cnl,
+        "delinquency": delinquency,
+        "all_pass": minimum_ce and cnl and delinquency,
+        "a1_cnl": cumulative_net_loss / CUTOFF_BALANCE <= A1_CNL_LIMIT + 1e-12,
+        "subordinate_pct": subordinate_pct,
+        "six_month_avg_distressed": avg_distressed,
+        "delinquency_threshold": delinquency_threshold,
+    }
+
+
+def a1_scheduled_reduction(payment_number: int, original_band_balance: float) -> float:
+    """Scheduled A-1/A-1H fast-pay amount before other senior allocation."""
+    if 1 <= payment_number <= 12:
+        return 0.0375 * original_band_balance
+    if 13 <= payment_number <= 36:
+        return 0.015 * original_band_balance
+    return 0.0
+
+
+def _apply_state(
+    tranches: list[Tranche], balances: Sequence[float],
+    *, writedowns: Sequence[float] | None = None, writeups: Sequence[float] | None = None,
+) -> list[Tranche]:
+    result: list[Tranche] = []
+    for i, tranche in enumerate(tranches):
+        cumulative = tranche.cumulative_writedown
+        if writedowns is not None:
+            cumulative += writedowns[i]
+        if writeups is not None:
+            cumulative = max(0.0, cumulative - writeups[i])
+        result.append(replace(tranche, balance=max(0.0, balances[i]), cumulative_writedown=cumulative))
+    return result
+
+
+def _coerce_pool_cf(pool_cf: pd.DataFrame) -> pd.DataFrame:
+    required = {
+        "beginning_balance", "scheduled_principal", "prepayments", "losses",
+        "recoveries", "ending_balance", "modification_losses", "distressed_balance",
+    }
+    missing = required - set(pool_cf.columns)
+    if missing:
+        raise ValueError(f"Pool cash flow is missing columns: {sorted(missing)}")
+    frame = pool_cf.copy().reset_index(drop=True)
+    if "defaults" not in frame:
+        frame["defaults"] = 0.0
+    if "month" not in frame:
+        frame["month"] = np.arange(1, len(frame) + 1)
+    if "date" in frame:
+        frame["date"] = pd.to_datetime(frame["date"])
+    numeric = required | {"defaults"}
+    for column in numeric:
+        frame[column] = pd.to_numeric(frame[column], errors="raise")
+        if (~np.isfinite(frame[column]) | (frame[column] < -1e-8)).any():
+            raise ValueError(f"Pool cash-flow column {column!r} must be finite and non-negative")
+    expected_ending = (
+        frame["beginning_balance"] - frame["scheduled_principal"]
+        - frame["prepayments"] - frame["defaults"]
+    )
+    tolerance = np.maximum(1.0, frame["beginning_balance"].to_numpy() * 1e-9)
+    if (np.abs(expected_ending - frame["ending_balance"]) > tolerance).any():
+        raise ValueError("Pool cash-flow balance roll-forward does not reconcile")
+    if len(frame) > 1:
+        prior_ending = frame["ending_balance"].iloc[:-1].to_numpy()
+        next_beginning = frame["beginning_balance"].iloc[1:].to_numpy()
+        if (np.abs(prior_ending - next_beginning) > np.maximum(1.0, prior_ending * 1e-9)).any():
+            raise ValueError("Pool cash-flow months do not link beginning to prior ending balance")
+    return frame
+
+
+def run(
+    tranches: list[Tranche], pool_cf: pd.DataFrame, *,
+    sofr: Sequence[float] | None = None, dates: Sequence[pd.Timestamp] | None = None,
+    accrual_days: Sequence[float] | None = None, call_date: pd.Timestamp | None = CALL_DATE,
+    starting_payment_number: int = 1, allow_inconsistent_initial_state: bool = False,
+) -> dict[str, pd.DataFrame]:
+    """Run pool cash flows through the implemented monthly waterfall.
+
+    ``sofr`` must be decimal (0.04 means 4%).  The function deliberately raises
+    when the first pool balance does not match the supplied tranche state, unless
+    the caller explicitly overrides the guard for a labeled demonstration.
+
+    Modification losses are rejected when non-zero because the upstream file has
+    not yet split rate-modification interest loss from principal forbearance.
+    Supplemental reduction is also not implemented yet; these limitations are
+    explicit so a partial model cannot masquerade as a final valuation.
+    """
+    cf = _coerce_pool_cf(pool_cf)
+    state = copy_tranches(tranches)
+    n = len(cf)
+    first_pool = float(cf.loc[0, "beginning_balance"]) if n else 0.0
+    state_total = sum(t.balance for t in state)
+    if n and not allow_inconsistent_initial_state and abs(first_pool - state_total) > max(1.0, first_pool * 1e-8):
+        raise ValueError(
+            "Pool beginning balance does not match supplied tranche state. "
+            "Provide current class balances or run a consistent closing-date demonstration."
+        )
+    if (cf["modification_losses"].abs() > 1e-8).any():
+        raise NotImplementedError(
+            "Non-zero modification losses require separate interest-loss and principal-forbearance inputs"
+        )
+    sofr_values = np.zeros(n) if sofr is None else np.asarray(sofr, dtype=float)
+    if len(sofr_values) != n or ((sofr_values < -0.10) | (sofr_values > 1.0)).any():
+        raise ValueError("sofr must contain one decimal rate per pool-cash-flow row")
+    if dates is None:
+        date_values = pd.date_range("2000-01-01", periods=n, freq="MS") + pd.Timedelta(days=24)
+    else:
+        date_values = pd.DatetimeIndex(pd.to_datetime(dates))
+        if len(date_values) != n:
+            raise ValueError("dates length must match pool cash flows")
+    days = np.full(n, 30.0) if accrual_days is None else np.asarray(accrual_days, dtype=float)
+    if len(days) != n or (days <= 0).any():
+        raise ValueError("accrual_days must contain one positive value per month")
+
+    outputs = {t.name: [] for t in state}
+    distressed_history: list[float] = []
+    cumulative_loss = 0.0
+    a1_failed = False
+    original_a1_band = sum(t.original_balance for t in state if t.name in ("A-1", "A-1H"))
+
+    for row_number, row in cf.iterrows():
+        payment_number = starting_payment_number + row_number
+        beginning = [t.balance for t in state]
+        interest = [t.balance * max(sofr_values[row_number] + t.spread_bps / 10_000, 0.0) * days[row_number] / 360
+                    if t.offered else 0.0 for t in state]
+        loss = _validate_amount(row.losses, "losses")
+        recovery = _validate_amount(row.recoveries, "recoveries")
+        cumulative_loss = max(0.0, cumulative_loss + loss - recovery)
+        distressed_history.append(_validate_amount(row.distressed_balance, "distressed_balance"))
+
+        loss_bands = _deal_bands_or_generic(state, LOSS_BANDS, reverse=True)
+        loss_balances, writedowns, excess_loss = _allocate_reduction(state, loss, loss_bands)
+        if excess_loss > 1e-5:
+            raise ValueError("Ordinary loss exhausted all eligible tranches")
+        state = _apply_state(state, loss_balances, writedowns=writedowns)
+        writeup_balances, writeups, _ = allocate_writeups(state, recovery)
+        state = _apply_state(state, writeup_balances, writeups=writeups)
+
+        if {"A-H", "A-1", "A-1H"}.issubset(_index(state)):
+            triggers = trigger_results(
+                state, float(row.beginning_balance), cumulative_loss, distressed_history,
+                current_principal_loss=loss, payment_number=payment_number,
+            )
+        else:
+            # Toy structures exercise generic allocation primitives without
+            # pretending to reproduce STACR-specific trigger definitions.
+            triggers = {
+                "minimum_ce": True, "cumulative_loss": True,
+                "delinquency": True, "all_pass": True, "a1_cnl": True,
+            }
+        a1_failed = a1_failed or not bool(triggers["a1_cnl"])
+
+        stated_principal = _validate_amount(row.scheduled_principal, "scheduled_principal") + _validate_amount(row.prepayments, "prepayments")
+        # The upstream schema has no separate recovery-principal field.  Recoveries
+        # are used for write-ups only until that handoff is clarified.
+        principal_paid = [0.0] * len(state)
+        by_name = _index(state)
+        if not a1_failed and stated_principal > 0 and {"A-1", "A-1H"}.issubset(by_name):
+            a1_band_balance = sum(state[by_name[n]].balance for n in ("A-1", "A-1H"))
+            scheduled = min(
+                a1_scheduled_reduction(payment_number, original_a1_band),
+                stated_principal, a1_band_balance,
+            )
+            scheduled_paid, excess = _allocate_principal_bands(state, scheduled, (("A-1", "A-1H"),))
+            if excess > 1e-6:
+                raise ValueError("A-1 scheduled amount exceeds band balance")
+            principal_paid = [a + b for a, b in zip(principal_paid, scheduled_paid)]
+            state = [replace(t, balance=t.balance - scheduled_paid[i]) for i, t in enumerate(state)]
+            stated_principal -= scheduled
+
+        if stated_principal > 1e-8:
+            residual_paid = allocate_principal(
+                state, stated_principal, bool(triggers["all_pass"]),
+                pool_balance=float(row.beginning_balance), recovery_principal=0.0,
+            )
+            principal_paid = [a + b for a, b in zip(principal_paid, residual_paid)]
+            state = [replace(t, balance=max(0.0, t.balance - residual_paid[i])) for i, t in enumerate(state)]
+
+        called = bool(call_date is not None and date_values[row_number] >= pd.Timestamp(call_date))
+        if called:
+            for i, tranche in enumerate(state):
+                principal_paid[i] += tranche.balance
+                state[i] = replace(tranche, balance=0.0)
+
+        for i, tranche in enumerate(state):
+            outputs[tranche.name].append({
+                "month": int(row.month), "date": date_values[row_number],
+                "beginning_balance": beginning[i], "interest": interest[i],
+                "principal": principal_paid[i], "writedown": writedowns[i],
+                "writeup": writeups[i], "ending_balance": tranche.balance,
+                "minimum_ce_test": bool(triggers["minimum_ce"]),
+                "cumulative_loss_test": bool(triggers["cumulative_loss"]),
+                "delinquency_test": bool(triggers["delinquency"]),
+                "all_triggers_pass": bool(triggers["all_pass"]),
+                "a1_cnl_test": not a1_failed, "called": called,
+            })
+        if called:
+            break
+
+    return {name: pd.DataFrame(rows) for name, rows in outputs.items()}
