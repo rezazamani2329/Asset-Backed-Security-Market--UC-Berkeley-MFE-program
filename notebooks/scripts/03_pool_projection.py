@@ -1,0 +1,262 @@
+#!/usr/bin/env python
+# coding: utf-8
+
+# # 03 · Pool projection & scenarios: the handoff to the waterfall
+# 
+# **Purpose.** Project the whole STACR reference pool month by month to the Feb 2031 call (53 months) under several scenarios, and produce the table that Smarajit's `src/waterfall.py` consumes. His waterfall only needs this table, not how CPR or defaults were modeled.
+# 
+# **Process (`src/collateral_projection.py`).**
+# 1. **Scheduled principal**: level-pay amortization. Payment = B·r / (1 − (1+r)⁻ⁿ), and principal = payment − B·r. Checked by hand: $300k, 6.75%, 342 months gives month-1 principal of $290.46.
+# 2. **`project_collateral`, one path.** Each month, in this order so no dollar leaves twice:
+#    1. *Defaults*: MDR × performing balance enter a 19-month **liquidation pipeline** (fitted median). They stay in the reference pool, counted in `distressed_balance`, which feeds the STACR Delinquency Test. 57% of new default spells never liquidate (cure, modification or payoff in the data); they stay performing at a slightly lower rate.
+#    2. *Scheduled principal* on the remaining performing balance.
+#    3. *Prepayments*: SMM × (balance after scheduled principal).
+#    4. *Credit events*: loans whose 19-month lag ends leave the pool, and **loss** = balance × severity at that month's HPI. Loans already 60+ days delinquent or in bankruptcy/foreclosure on the tape start in the pipeline and liquidate in month 9.
+# 
+#    Balance identity: ending = beginning − scheduled − prepayments − credit events (checked every month).
+# 3. **`run_scenarios`**: good / base / moderate / severe paths for HPI and mortgage rates (**placeholders** until Coco delivers).
+# 4. **Figure 3** and a summary of cumulative losses against the tranche attachment points.
+# 5. **Save** each scenario's table to `outputs/pool_cf_<scenario>.parquet` for the waterfall.
+# 
+# Output columns: `month, beginning_balance, scheduled_principal, prepayments, defaults (credit events), losses, recoveries, ending_balance, modification_losses, distressed_balance`, all in $.
+
+# In[1]:
+
+
+import sys, warnings
+from pathlib import Path
+
+# Find the repo root (the folder that contains src/) so imports work from anywhere
+ROOT = Path.cwd()
+while not (ROOT / "src").is_dir() and ROOT != ROOT.parent:
+    ROOT = ROOT.parent
+sys.path.insert(0, str(ROOT))
+warnings.filterwarnings("ignore", category=FutureWarning)  # pandas 2.2 + Python 3.14 noise
+
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+pd.set_option("display.float_format", "{:,.4f}".format)
+print("repo root:", ROOT)
+
+
+# **Q&A · Setup**
+# 
+# **Q: Why does the first cell search upward for a folder containing `src/`?**
+# A: The model code lives in `src/` at the repo root. Jupyter may start in the repo root or in `notebooks/`, so the cell walks up the folder tree until it finds `src/` and adds that folder to `sys.path`. Then `from src import ...` works wherever the notebook is opened.
+# 
+# **Q: Why are FutureWarnings turned off? Doesn't that hide problems?**
+# A: pandas 2.2 running on Python 3.14 prints spurious "chained assignment" warnings from `clean.py`, which drown out the real output. Only *warnings* are hidden. Real errors still stop the cell, so nothing that would make a result wrong is suppressed.
+
+# In[2]:
+
+
+def try_run(fn, *args, **kwargs):
+    """Call a model function; if it's still a stub, say so instead of crashing."""
+    try:
+        return fn(*args, **kwargs)
+    except NotImplementedError:
+        print(f"-> {fn.__module__}.{fn.__name__} is not implemented yet")
+        return None
+
+
+# **Q&A · `try_run`**
+# 
+# **Q: What does `try_run` do, and is it still needed?**
+# A: It calls a model function and, if the function raises `NotImplementedError`, prints "not implemented yet" instead of crashing. It dates from the scaffold stage, when the functions were empty stubs. Every function is implemented now, so `try_run` just returns the result. It's harmless and keeps the notebook runnable if a function is ever replaced by a stub again.
+
+# In[3]:
+
+
+from src import collateral_projection as cp
+pool = pd.read_parquet(ROOT / "data" / "processed" / "stacr_dna1.parquet")
+print(f"{len(pool):,} loans, ${pool['Current Balance'].sum()/1e9:.2f}bn")
+print('output columns:', cp.COLUMNS)
+
+
+# **Q&A · Loading the pool**
+# 
+# **Q: Why use the full pool here rather than a sample?**
+# A: This notebook produces the cash flows that Smarajit's waterfall allocates to A-1, M-1 and M-2. They must add up to the real reference pool ($19.44bn today), so all 56,871 loans are projected. The code is vectorized, so a 53-month projection still takes about a second.
+# 
+# **Q: What are the output columns for?**
+# A: `scheduled_principal` + `prepayments` + `defaults` (balance leaving through credit events) are the principal flows; `losses` drive write-downs; `modification_losses` cut tranche interest; `distressed_balance` feeds the Delinquency Test; `beginning_balance`/`ending_balance` let the waterfall check the Senior Percentage and the clean-up call.
+
+# ## Step 1 · Scheduled principal
+# 
+# > Check by hand: $300k, 6.75%, 342 months left. What's month-1 principal?
+
+# In[4]:
+
+
+sp = try_run(cp.scheduled_principal, np.array([300_000.0]), np.array([6.75]), np.array([342]))
+print(sp)
+
+
+# **Result · Scheduled principal.** **$290.46**, matching the hand check (payment $1,977.96 − interest $1,687.50).
+
+# **Q&A · Scheduled principal**
+# 
+# **Q: Where does the payment formula come from?**
+# A: A fixed-rate mortgage is an annuity: the balance B equals the present value of n equal payments at the monthly rate r = coupon/1200. Solving B = P·[1 − (1+r)⁻ⁿ]/r for the payment gives P = B·r / (1 − (1+r)⁻ⁿ). Each month interest is B·r, and the rest of the payment is principal.
+# 
+# **Q: Why is month-1 principal only $290 of a $1,978 payment?**
+# A: Early in a 30-year loan the balance is large, so interest (B·r = $1,687.50) takes most of the payment. Principal only overtakes interest around month 220. That's why scheduled principal is just about 0.1% of the pool a month, and prepayment drives the pool's paydown.
+
+# ## Step 2 · One path → monthly table
+# 
+# > Within a month, which balance does SMM apply to, and which does MDR? Does your table conserve balance?
+
+# In[5]:
+
+
+N_MONTHS = 53
+flat_rate = np.full(N_MONTHS, 6.25)
+flat_hpi = np.ones(N_MONTHS + 1)
+
+cf = try_run(cp.project_collateral, pool, flat_hpi, flat_rate, N_MONTHS)
+if cf is not None:
+    out = cf["scheduled_principal"] + cf["prepayments"] + cf["defaults"]
+    print("max balance error ($):", (cf["beginning_balance"] - out - cf["ending_balance"]).abs().max())
+    display(cf.head(12))
+
+
+# **Result · One path (flat HPI, 6.25% rate, fitted parameters).** The balance identity holds every month (max error < $0.00001), starting at **$19.44bn**.
+# - **Prepayments dominate**: about **$409mm** in month 1 vs **$19mm** of scheduled principal.
+# - **Credit events**: zero in months 1–8, then **$47.8mm in month 9**. Those are the loans already 60+ days late or coded B/F on the tape, liquidating halfway through the 19-month lag, with a **$22.7mm loss** (47% severity). New defaults only start liquidating in month 20.
+# - **`distressed_balance`** starts at about **$55mm**, rises to about $90mm by month 6 as new default spells enter the pipeline, drops to about $61mm after the month-9 liquidations, peaks near **$103mm**, and falls to about $35mm by 2031 as the pool shrinks. This column feeds the waterfall's Delinquency Test.
+# - **`modification_losses`** grow slowly, from $0 to about **$31k a month** by 2031 as modified loans accumulate. That's small next to liquidation losses.
+
+# **Q&A · One path, the monthly table**
+# 
+# **Q: Within a month, which balance does SMM apply to, and which does MDR? (the question in Step 2)**
+# A: The order is defaults → scheduled principal → prepayments. MDR applies to the **performing balance at the start of the month**. Scheduled principal is computed on what's left after defaults. SMM then applies to the balance **after** both. Each dollar can leave only one way, which is why the balance identity (ending = beginning − scheduled − prepayments − credit events) holds to within a fraction of a cent.
+# 
+# **Q: Why is there a spike of credit events in month 9?**
+# A: Loans that were already 60+ days late, or in bankruptcy/foreclosure (codes B/F), on the tape start in the liquidation pipeline. The model assumes they're halfway through the 19-month lag, so they liquidate in month 9: $47.8mm with a $22.7mm loss. New defaults only reach liquidation from month 20.
+# 
+# **Q: Why does `distressed_balance` matter to the waterfall?**
+# A: STACR's Delinquency Test compares the 6-month average distressed balance (60+ days late, in foreclosure, REO or recently modified) with 50% of the subordinate cushion. If it fails, all principal goes to the senior classes and the mezzanine notes stop amortizing, which lengthens their life and loss exposure.
+
+# ## Step 3 · Scenarios
+# 
+# Placeholder paths; swap in Coco's from `src/scenarios.py`.
+
+# In[6]:
+
+
+scenarios = {
+    "good":     {"hpi": np.linspace(1.00, 1.25, N_MONTHS + 1), "rate": np.full(N_MONTHS, 5.00)},
+    "base":     {"hpi": np.linspace(1.00, 1.15, N_MONTHS + 1), "rate": np.full(N_MONTHS, 6.25)},
+    "moderate": {"hpi": np.linspace(1.00, 0.90, N_MONTHS + 1), "rate": np.full(N_MONTHS, 5.75)},
+    "severe":   {"hpi": np.linspace(1.00, 0.75, N_MONTHS + 1), "rate": np.full(N_MONTHS, 5.25)},
+}
+results = try_run(cp.run_scenarios, pool, scenarios, N_MONTHS)
+
+
+# **Result · Scenarios.** `run_scenarios` produced four 53-month tables (good, base, moderate, severe), one per placeholder path, using the fitted parameters. Their results are below.
+
+# **Q&A · Scenarios**
+# 
+# **Q: What exactly are the four placeholder paths?**
+# A: Each runs linearly over 53 months to the Feb 2031 call: **good** HPI +25%, mortgage rate 5.00%; **base** HPI +15%, 6.25%; **moderate** HPI −10%, 5.75%; **severe** HPI −25%, 5.25%.
+# 
+# **Q: What's wrong with them?**
+# A: Two things. First, the stress paths also *lower* rates, so stressed loans prepay faster and escape before prices bottom out, which understates stress losses. Second, the base rate of 6.25% is well below today's PMMS of 7.28%, so base-case prepayment is too fast.
+# 
+# **Q: What will change when Coco's scenarios arrive?**
+# A: Only the inputs. Her `scenarios.py` will supply HPI and PMMS paths in the same shape (`{"hpi": n+1 points from 1.0, "rate": n monthly rates}`), and the projection code stays the same.
+
+# ### Figure 3 · Projected reference-pool balance
+
+# In[7]:
+
+
+if results:
+    for name, df in results.items():
+        plt.plot(df["month"], df["ending_balance"] / 1e9, label=name)
+    plt.xlabel("month"); plt.ylabel("pool balance ($bn)"); plt.legend()
+
+
+# **Result · Figure 3 (pool balance).** All four paths pay down fast, but at different speeds:
+# 
+# | | month 12 | month 24 | month 36 | month 53 | half paid down by |
+# |---|---|---|---|---|---|
+# | good | $11.5bn | $7.4bn | $5.1bn | **$3.22bn** | month 17 |
+# | base | $15.1bn | $12.0bn | $9.7bn | **$7.34bn** | month 36 |
+# | moderate | $13.2bn | $9.4bn | $7.0bn | **$4.76bn** | month 23 |
+# | severe | $11.8bn | $7.8bn | $5.4bn | **$3.46bn** | month 18 |
+# 
+# Year-1 CPR is about **40% / 21% / 31% / 38%**. The stressed paths pay down faster than base only because the placeholder stress also **cuts rates** (5.75% and 5.25%). In a real downturn underwater borrowers can't refinance, so this is too optimistic for the severe case. At today's PMMS of 7.28% the base case would run at only about 8% CPR (notebook 05).
+
+# **Q&A · Figure 3, pool balance**
+# 
+# **Q: Why does the good path pay down fastest?**
+# A: It has the lowest mortgage rate (5.00%), so the pool is about 1.8 pp in the money and CPR averages about 40% in year 1. Half the pool is gone by month 17.
+# 
+# **Q: Why does severe pay down faster than base?**
+# A: Only because the placeholder severe path assumes 5.25% rates (vs 6.25% base), which raises refinancing. In reality, borrowers with falling home values often can't refinance, so a real severe path would likely pay down *slower* than base.
+# 
+# **Q: How does the paydown affect the notes?**
+# A: Faster paydown returns principal sooner and shortens the notes' WAL. For the first 36 months A-1 gets a fixed paydown schedule from the senior share. While the triggers pass, the mezzanine notes (M-1, then M-2A, M-2B) are paid sequentially from the subordinate share.
+
+# In[8]:
+
+
+if results:
+    display(pd.DataFrame({name: {
+        "cum. losses ($mm)": df["losses"].sum() / 1e6,
+        "cum. loss / cut-off (%)": df["losses"].sum() / cp.CUTOFF_BALANCE * 100,
+        "end balance ($bn)": df["ending_balance"].iloc[-1] / 1e9,
+    } for name, df in results.items()}))
+
+
+# **Result · Losses vs the tranche stack.** Cumulative losses (good / base / moderate / severe) are **$39.0mm / $47.6mm / $55.1mm / $60.1mm**, or **0.171% / 0.209% / 0.242% / 0.264%** of the $22.78bn cut-off balance. That's 3–15× the placeholder results (13× in the base case), almost entirely because of the fitted severity.
+# - The first-loss piece **B-3H covers 0–0.25%**: base uses about 84% of it, moderate about 97%, and **severe exhausts it** and puts about 0.014% (≈$3mm) into **B-2H**.
+# - The offered **M-2B (attaching at 1.90%), M-1 and A-1 still take no write-downs**.
+# - About $22mm of each scenario's loss comes from loans already delinquent on the tape, so it's locked in whatever the scenario.
+
+# > Compare cumulative loss / cut-off with the tranche bands in `docs/cashflows.md` (B-3H 0–0.25%, B-2H 0.25–1.45%, …, M-2B attaches at 1.90%). Which scenario reaches the offered notes?
+
+# **Q&A · Losses vs the tranche stack**
+# 
+# **Q: How do I read "loss / cut-off" against the tranches?**
+# A: Attachment and detachment points are percentages of the **cut-off** balance ($22.78bn). A tranche is written down only once cumulative losses pass its attachment point. B-3H covers 0–0.25%, B-2H 0.25–1.45%, B-1H 1.45–1.90%, and M-2B starts at 1.90%.
+# 
+# **Q: Why are the offered notes safe even in the severe case?**
+# A: Severe losses are 0.264% of cut-off, which uses all of B-3H and about 0.014% (≈$3mm) of B-2H. The offered notes sit behind 1.90% of subordination, about 7× the severe loss.
+# 
+# **Q: Why is about $22mm of loss the same in every scenario?**
+# A: It comes from the loans already 60+ days late on the tape, which liquidate in month 9 before the scenarios have diverged much. That loss is effectively locked in.
+
+# ## Step 4 · Save the handoff for Smarajit
+
+# In[9]:
+
+
+if results:
+    out_dir = ROOT / "outputs"; out_dir.mkdir(exist_ok=True)
+    for name, df in results.items():
+        df.to_parquet(out_dir / f"pool_cf_{name}.parquet", index=False)
+    print("saved to", out_dir)
+
+
+# **Result · Saved.** Four files are in `outputs/` (gitignored): `pool_cf_good.parquet`, `pool_cf_base.parquet`, `pool_cf_moderate.parquet` and `pool_cf_severe.parquet`, each with 53 rows and the 10 agreed columns. These are what Smarajit's waterfall reads.
+
+# **Q&A · Saving the handoff**
+# 
+# **Q: Why parquet files, and why are they gitignored?**
+# A: Parquet keeps exact numeric types and loads instantly in pandas. The tables are built from licensed Bloomberg data, so they stay local (`outputs/` is gitignored) and teammates regenerate them by running this notebook.
+# 
+# **Q: How will Smarajit use them?**
+# A: Scheduled principal + prepayments make up the deal's Stated Principal, which the waterfall splits between the senior and subordinate shares. `losses` become tranche write-downs from the bottom up. `modification_losses` reduce junior interest. `distressed_balance` and cumulative losses drive the Delinquency and Cumulative Net Loss tests.
+
+# ## Results and takeaways (fitted parameters, placeholder scenarios)
+# 
+# - **The table is consistent**: the balance identity holds every month, and month 1 starts at today's **$19.44bn**.
+# - **Prepayment dominates the cash flow**: about $409mm of prepayments vs $19mm of scheduled principal in month 1 (base), and about 93% of all principal leaving the pool is prepayment. Year-1 CPR is about **40% / 21% / 31% / 38%** (good / base / moderate / severe).
+# - **Pool runoff to the Feb 2031 call**: **$3.22bn / $7.34bn / $4.76bn / $3.46bn**. Faster runoff shortens the notes' life (WAL), and Smarajit's waterfall turns this into A-1/M-1/M-2 principal.
+# - **Credit events**: $47.8mm of loans already seriously delinquent liquidate in month 9 (a $21–24mm loss across scenarios). New defaults start liquidating after the fitted 19-month lag, so only spells that start in the first ~34 months reach a credit event before the call.
+# - **Losses**: **0.171% / 0.209% / 0.242% / 0.264%** of cut-off. Base and moderate stay inside **B-3H (0–0.25%)**, and severe just reaches **B-2H**. **A-1, M-1 and M-2 take no write-downs**: M-2B would need cumulative losses above 1.90%, about 7× the severe case.
+# 
+# **What this means and what's next.** Calibration raised base-case expected losses about 13-fold, through severity, but the offered notes are still protected by about 1.9% of subordination. Their main risk remains **prepayment timing**, and today's 7.28% PMMS points to a much slower base case than the placeholder 6.25%. Next: (1) replace the placeholder paths with Coco's scenarios starting from today's PMMS; (2) block refinancing for underwater loans so severe scenarios don't prepay away the risk; (3) run a harsher severe path (HPI −30% or worse) to find how much stress reaches M-2B.
