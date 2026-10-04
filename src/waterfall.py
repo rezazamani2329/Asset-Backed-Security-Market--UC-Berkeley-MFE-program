@@ -82,6 +82,27 @@ SUBORDINATE_PRINCIPAL_BANDS: tuple[tuple[str, ...], ...] = (
     ("M-1", "M-1H"), ("M-2A", "M-2AH"), ("M-2B", "M-2BH"),
     ("B-1H",), ("B-2H",), ("B-3H",), ("A-1", "A-1H"), ("A-H",),
 )
+POST_36_SENIOR_PRINCIPAL_BANDS: tuple[tuple[str, ...], ...] = (
+    ("A-1", "A-1H"), ("A-H",), ("M-1", "M-1H"),
+    ("M-2A", "M-2AH"), ("M-2B", "M-2BH"),
+    ("B-1H",), ("B-2H",), ("B-3H",),
+)
+
+# PPM pp. 84-85. Each tuple is (amount type, reference-tranche band).
+# B-3H has no deemed coupon, so its modification allocation is principal.
+MODIFICATION_LOSS_PRIORITY: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("principal", ("B-3H",)),
+    ("interest", ("B-2H",)), ("principal", ("B-2H",)),
+    ("interest", ("B-1H",)), ("principal", ("B-1H",)),
+    ("interest", ("M-2B", "M-2BH")),
+    ("interest", ("M-2A", "M-2AH")),
+    ("principal", ("M-2B", "M-2BH")),
+    ("principal", ("M-2A", "M-2AH")),
+    ("interest", ("M-1", "M-1H")),
+    ("principal", ("M-1", "M-1H")),
+    ("interest", ("A-1", "A-1H")),
+    ("principal", ("A-1", "A-1H")),
+)
 SENIOR_PRINCIPAL_BANDS: tuple[tuple[str, ...], ...] = (
     ("A-H",), ("A-1", "A-1H"), ("M-1", "M-1H"),
     ("M-2A", "M-2AH"), ("M-2B", "M-2BH"),
@@ -159,10 +180,10 @@ def _allocate_reduction(
 # In particular, M-1 uses the Sep factor 0.571984481, not the Aug factor
 # 0.594889779 that appeared in the earlier estimate.
 CURRENT_BALANCES = {
-    "A-H":   18_550_117_630.85,
+    "A-H":   18_550_117_630.84,
     "A-1":      203_476_250.00,   # factor 0.737500
     "A-1H":      10_737_765.47,
-    "M-1":      157_810_518.31,   # Sep factor 0.571984481
+    "M-1":      157_810_518.32,   # Bloomberg balance; displayed factor is rounded
     "M-1H":       8_327_912.15,   # same factor as M-1
     "M-2A":      37_850_000.00,   # factor 1.000000
     "M-2AH":      2_017_015.00,
@@ -227,6 +248,7 @@ def _allocate_principal_bands(
 def allocate_principal(
     tranches: list[Tranche], principal: float, triggers_pass: bool,
     *, pool_balance: float | None = None, recovery_principal: float = 0.0,
+    a1_priority: bool = False, a1_scheduled_amount: float = 0.0,
 ) -> list[float]:
     """Allocate principal using the senior/subordinate trigger gate.
 
@@ -255,9 +277,23 @@ def allocate_principal(
     senior_amount = stated + recovery if not triggers_pass else senior_pct * stated + recovery
     subordinate_amount = stated + recovery - senior_amount
 
-    senior_paid, senior_excess = _allocate_principal_bands(
-        tranches, senior_amount, SENIOR_PRINCIPAL_BANDS
+    # The fixed A-1 amount is the first use of the Senior Reduction Amount; it
+    # must not be removed from total principal before the senior/sub split.
+    scheduled_request = _validate_amount(a1_scheduled_amount, "a1_scheduled_amount")
+    scheduled_amount = min(scheduled_request, senior_amount)
+    scheduled_paid, scheduled_excess = _allocate_principal_bands(
+        tranches, scheduled_amount, (("A-1", "A-1H"),)
     )
+    scheduled_used = scheduled_amount - scheduled_excess
+    after_schedule = [
+        replace(t, balance=t.balance - scheduled_paid[i]) for i, t in enumerate(tranches)
+    ]
+
+    senior_bands = POST_36_SENIOR_PRINCIPAL_BANDS if a1_priority else SENIOR_PRINCIPAL_BANDS
+    senior_paid, senior_excess = _allocate_principal_bands(
+        after_schedule, senior_amount - scheduled_used, senior_bands
+    )
+    senior_paid = [a + b for a, b in zip(scheduled_paid, senior_paid)]
     interim = [replace(t, balance=t.balance - senior_paid[i]) for i, t in enumerate(tranches)]
     sub_paid, sub_excess = _allocate_principal_bands(
         interim, subordinate_amount, SUBORDINATE_PRINCIPAL_BANDS
@@ -265,6 +301,51 @@ def allocate_principal(
     if senior_excess + sub_excess > 1e-5:
         raise ValueError("Principal exceeds outstanding tranche balance")
     return [a + b for a, b in zip(senior_paid, sub_paid)]
+
+
+def allocate_modification_loss(
+    tranches: Sequence[Tranche], gross_interest: Sequence[float], amount: float,
+) -> tuple[list[float], list[float], list[float], float]:
+    """Allocate an aggregate rate-modification loss under the PPM priority.
+
+    The collateral model's ``modification_losses`` field is specifically the
+    current-month interest lost from rate cuts. The PPM nevertheless lets that
+    amount exhaust deemed/current interest and then principal in a prescribed
+    order. Interest capacity includes Freddie's H pieces and B-1H/B-2H deemed
+    interest; only offered-note reductions affect investor cash interest.
+
+    Returns ``(interest_reductions, principal_reductions, balances, excess)``.
+    """
+    remaining = _validate_amount(amount, "modification_loss")
+    interest_capacity = np.asarray(gross_interest, dtype=float).copy()
+    if interest_capacity.shape != (len(tranches),) or not np.isfinite(interest_capacity).all():
+        raise ValueError("gross_interest must contain one finite amount per tranche")
+    if (interest_capacity < -1e-8).any():
+        raise ValueError("gross_interest cannot be negative")
+    interest_capacity = np.maximum(interest_capacity, 0.0)
+    balances = np.asarray([t.balance for t in tranches], dtype=float)
+    interest_reduction = np.zeros(len(tranches))
+    principal_reduction = np.zeros(len(tranches))
+    by_name = _index(tranches)
+
+    for amount_type, band in MODIFICATION_LOSS_PRIORITY:
+        ids = [by_name[name] for name in band if name in by_name]
+        capacity_vector = interest_capacity if amount_type == "interest" else balances
+        capacity = float(capacity_vector[ids].sum())
+        take = min(remaining, capacity)
+        if take > 0 and capacity > 0:
+            allocation = take * capacity_vector[ids] / capacity
+            capacity_vector[ids] -= allocation
+            target = interest_reduction if amount_type == "interest" else principal_reduction
+            target[ids] += allocation
+        remaining -= take
+        if remaining <= 1e-7:
+            remaining = 0.0
+            break
+    return (
+        interest_reduction.tolist(), principal_reduction.tolist(),
+        balances.tolist(), remaining,
+    )
 
 
 def cumulative_loss_limit(payment_number: int) -> float:
@@ -369,6 +450,9 @@ def run(
     sofr: Sequence[float] | None = None, dates: Sequence[pd.Timestamp] | None = None,
     accrual_days: Sequence[float] | None = None, call_date: pd.Timestamp | None = CALL_DATE,
     starting_payment_number: int = 1, allow_inconsistent_initial_state: bool = False,
+    initial_cumulative_loss: float = 0.0,
+    initial_distressed_history: Sequence[float] = (),
+    a1_cnl_ever_failed: bool = False,
 ) -> dict[str, pd.DataFrame]:
     """Run pool cash flows through the implemented monthly waterfall.
 
@@ -376,10 +460,10 @@ def run(
     when the first pool balance does not match the supplied tranche state, unless
     the caller explicitly overrides the guard for a labeled demonstration.
 
-    Modification losses are rejected when non-zero because the upstream file has
-    not yet split rate-modification interest loss from principal forbearance.
-    Supplemental reduction is also not implemented yet; these limitations are
-    explicit so a partial model cannot masquerade as a final valuation.
+    The upstream ``modification_losses`` field is defined as current-month
+    interest lost from rate modifications and is allocated through the PPM's
+    special interest-first priority. Principal forbearance and modification
+    gains would require separate inputs and are not present in this handoff.
     """
     cf = _coerce_pool_cf(pool_cf)
     state = copy_tranches(tranches)
@@ -390,10 +474,6 @@ def run(
         raise ValueError(
             "Pool beginning balance does not match supplied tranche state. "
             "Provide current class balances or run a consistent closing-date demonstration."
-        )
-    if (cf["modification_losses"].abs() > 1e-8).any():
-        raise NotImplementedError(
-            "Non-zero modification losses require separate interest-loss and principal-forbearance inputs"
         )
     sofr_values = np.zeros(n) if sofr is None else np.asarray(sofr, dtype=float)
     if len(sofr_values) != n or ((sofr_values < -0.10) | (sofr_values > 1.0)).any():
@@ -409,19 +489,27 @@ def run(
         raise ValueError("accrual_days must contain one positive value per month")
 
     outputs = {t.name: [] for t in state}
-    distressed_history: list[float] = []
-    cumulative_loss = 0.0
-    a1_failed = False
+    distressed_history = [
+        _validate_amount(value, "initial_distressed_history")
+        for value in initial_distressed_history
+    ][-6:]
+    cumulative_loss = _validate_amount(initial_cumulative_loss, "initial_cumulative_loss")
+    a1_failed = bool(a1_cnl_ever_failed)
     original_a1_band = sum(t.original_balance for t in state if t.name in ("A-1", "A-1H"))
 
     for row_number, row in cf.iterrows():
         payment_number = starting_payment_number + row_number
         beginning = [t.balance for t in state]
-        interest = [t.balance * max(sofr_values[row_number] + t.spread_bps / 10_000, 0.0) * days[row_number] / 360
-                    if t.offered else 0.0 for t in state]
+        interest_entitlement = [
+            t.balance * max(sofr_values[row_number] + t.spread_bps / 10_000, 0.0)
+            * days[row_number] / 360 if t.spread_bps else 0.0
+            for t in state
+        ]
+        gross_interest = [amount if t.offered else 0.0 for amount, t in zip(interest_entitlement, state)]
         loss = _validate_amount(row.losses, "losses")
+        modification_loss = _validate_amount(row.modification_losses, "modification_losses")
         recovery = _validate_amount(row.recoveries, "recoveries")
-        cumulative_loss = max(0.0, cumulative_loss + loss - recovery)
+        cumulative_loss = max(0.0, cumulative_loss + loss + modification_loss - recovery)
         distressed_history.append(_validate_amount(row.distressed_balance, "distressed_balance"))
 
         loss_bands = _deal_bands_or_generic(state, LOSS_BANDS, reverse=True)
@@ -429,6 +517,19 @@ def run(
         if excess_loss > 1e-5:
             raise ValueError("Ordinary loss exhausted all eligible tranches")
         state = _apply_state(state, loss_balances, writedowns=writedowns)
+
+        modification_interest, modification_principal, modification_balances, excess_modification = (
+            allocate_modification_loss(state, interest_entitlement, modification_loss)
+        )
+        if excess_modification > 1e-5:
+            raise ValueError("Modification loss exhausted all eligible interest and principal")
+        state = _apply_state(state, modification_balances, writedowns=modification_principal)
+        total_writedowns = [a + b for a, b in zip(writedowns, modification_principal)]
+        interest = [
+            max(0.0, gross_interest[i] - modification_interest[i])
+            for i in range(len(state))
+        ]
+
         writeup_balances, writeups, _ = allocate_writeups(state, recovery)
         state = _apply_state(state, writeup_balances, writeups=writeups)
 
@@ -450,24 +551,16 @@ def run(
         # The upstream schema has no separate recovery-principal field.  Recoveries
         # are used for write-ups only until that handoff is clarified.
         principal_paid = [0.0] * len(state)
-        by_name = _index(state)
-        if not a1_failed and stated_principal > 0 and {"A-1", "A-1H"}.issubset(by_name):
-            a1_band_balance = sum(state[by_name[n]].balance for n in ("A-1", "A-1H"))
-            scheduled = min(
-                a1_scheduled_reduction(payment_number, original_a1_band),
-                stated_principal, a1_band_balance,
-            )
-            scheduled_paid, excess = _allocate_principal_bands(state, scheduled, (("A-1", "A-1H"),))
-            if excess > 1e-6:
-                raise ValueError("A-1 scheduled amount exceeds band balance")
-            principal_paid = [a + b for a, b in zip(principal_paid, scheduled_paid)]
-            state = [replace(t, balance=t.balance - scheduled_paid[i]) for i, t in enumerate(state)]
-            stated_principal -= scheduled
-
         if stated_principal > 1e-8:
+            scheduled = (
+                a1_scheduled_reduction(payment_number, original_a1_band)
+                if not a1_failed else 0.0
+            )
             residual_paid = allocate_principal(
                 state, stated_principal, bool(triggers["all_pass"]),
                 pool_balance=float(row.beginning_balance), recovery_principal=0.0,
+                a1_priority=payment_number >= 37 and not a1_failed,
+                a1_scheduled_amount=scheduled,
             )
             principal_paid = [a + b for a, b in zip(principal_paid, residual_paid)]
             state = [replace(t, balance=max(0.0, t.balance - residual_paid[i])) for i, t in enumerate(state)]
@@ -481,8 +574,11 @@ def run(
         for i, tranche in enumerate(state):
             outputs[tranche.name].append({
                 "month": int(row.month), "date": date_values[row_number],
-                "beginning_balance": beginning[i], "interest": interest[i],
-                "principal": principal_paid[i], "writedown": writedowns[i],
+                "beginning_balance": beginning[i], "gross_interest": gross_interest[i],
+                "modification_interest_loss": modification_interest[i], "interest": interest[i],
+                "principal": principal_paid[i], "ordinary_writedown": writedowns[i],
+                "modification_principal_loss": modification_principal[i],
+                "writedown": total_writedowns[i],
                 "writeup": writeups[i], "ending_balance": tranche.balance,
                 "minimum_ce_test": bool(triggers["minimum_ce"]),
                 "cumulative_loss_test": bool(triggers["cumulative_loss"]),

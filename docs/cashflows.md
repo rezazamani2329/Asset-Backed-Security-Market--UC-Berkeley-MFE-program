@@ -49,11 +49,11 @@ The waterfall starts from today's pool ($19.44bn in the Bloomberg tape), so it n
 | Class | Original ($) | Current ($) | Factor |
 |---|---|---|---|
 | A-1 | 275,900,000 | 203,476,250 | 0.7375 |
-| M-1 | 275,900,000 | 157,810,518 | 0.571984481 |
+| M-1 | 275,900,000 | 157,810,518.32 | 0.571984481 |
 | M-2A | 37,850,000 | 37,850,000 | 1.0000 |
 | M-2B | 37,850,000 | 37,850,000 | 1.0000 |
 
-A-1 has paid 26.25% on its fixed schedule. M-1 has taken all of the subordinate principal so far. M-2A and M-2B have not been paid yet because the M classes pay sequentially. Bloomberg PDI reports M-1 factors of 0.594889779 for August and 0.571984481 for September; the valuation uses September. The full list, including Freddie's pieces, is `CURRENT_BALANCES` in `src/waterfall.py`.
+A-1 has paid 26.25% on its fixed schedule. M-1 has taken all of the subordinate principal so far. M-2A and M-2B have not been paid yet because the M classes pay sequentially. Bloomberg PDI reports M-1 factors of 0.594889779 for August and 0.571984481 for September; the valuation uses September. The displayed factor is rounded, so the model uses Bloomberg's displayed balance of $157,810,518.32 as authoritative. The full list, including Freddie's pieces, is `CURRENT_BALANCES` in `src/waterfall.py`.
 
 ## Loss allocation rules
 

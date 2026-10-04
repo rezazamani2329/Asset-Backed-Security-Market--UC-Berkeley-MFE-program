@@ -5,7 +5,7 @@ import pytest
 
 from src.waterfall import (
     CUTOFF_BALANCE, CURRENT_BALANCES, CURRENT_POOL_BALANCE, TRANCHES, Tranche, a1_scheduled_reduction,
-    allocate_losses, allocate_principal, allocate_writeups, copy_tranches,
+    allocate_losses, allocate_modification_loss, allocate_principal, allocate_writeups, copy_tranches,
     cumulative_loss_limit, current_tranches, run, trigger_results,
 )
 
@@ -142,15 +142,50 @@ def test_run_one_consistent_toy_month_reconciles():
     assert sum(frame.loc[0, "principal"] for frame in out.values()) == pytest.approx(10.0)
 
 
-def test_nonzero_modification_losses_are_not_silently_misallocated():
-    pool = pd.DataFrame({
-        "month": [1], "beginning_balance": [1000.0],
-        "scheduled_principal": [0.0], "prepayments": [0.0], "losses": [0.0],
-        "recoveries": [0.0], "ending_balance": [1000.0],
-        "modification_losses": [1.0], "distressed_balance": [0.0],
-    })
-    with pytest.raises(NotImplementedError, match="modification losses"):
-        run(toy_structure(), pool)
+def test_modification_loss_uses_special_interest_first_priority():
+    deal = copy_tranches(TRANCHES)
+    gross_interest = [10.0 if t.name == "B-2H" else 0.0 for t in deal]
+    interest_loss, principal_loss, balances, excess = allocate_modification_loss(
+        deal, gross_interest, 5.0,
+    )
+    by_name = {t.name: i for i, t in enumerate(deal)}
+    # B-3H has no deemed interest, so modification loss reaches its principal first.
+    assert principal_loss[by_name["B-3H"]] == pytest.approx(5.0)
+    assert sum(interest_loss) == 0.0
+    assert sum(balances) == pytest.approx(sum(t.balance for t in deal) - 5.0)
+    assert excess == 0.0
+
+    b3 = deal[by_name["B-3H"]].balance
+    interest_loss, principal_loss, _, excess = allocate_modification_loss(
+        deal, gross_interest, b3 + 4.0,
+    )
+    assert principal_loss[by_name["B-3H"]] == pytest.approx(b3)
+    assert interest_loss[by_name["B-2H"]] == pytest.approx(4.0)
+    assert excess == 0.0
+
+
+def test_post_36_senior_principal_pays_a1_before_ah():
+    paid = allocate_principal(
+        current_tranches(), 10_000_000.0, False,
+        pool_balance=CURRENT_POOL_BALANCE, a1_priority=True,
+    )
+    by_name = {t.name: paid[i] for i, t in enumerate(current_tranches())}
+    assert by_name["A-1"] + by_name["A-1H"] == pytest.approx(10_000_000.0)
+    assert by_name["A-H"] == 0.0
+
+
+def test_a1_schedule_is_paid_inside_senior_bucket():
+    principal = 100_000_000.0
+    state = copy_tranches(TRANCHES)
+    paid = allocate_principal(
+        state, principal, True, pool_balance=CUTOFF_BALANCE,
+        a1_scheduled_amount=10_000_000.0,
+    )
+    by_name = {t.name: paid[i] for i, t in enumerate(state)}
+    senior_pct = sum(t.balance for t in state if t.name in ("A-H", "A-1", "A-1H")) / CUTOFF_BALANCE
+    assert by_name["A-1"] + by_name["A-1H"] == pytest.approx(10_000_000.0)
+    assert by_name["A-H"] == pytest.approx(principal * senior_pct - 10_000_000.0)
+    assert sum(by_name[n] for n in ("M-1", "M-1H")) == pytest.approx(principal * (1 - senior_pct))
 
 
 def test_pool_balance_must_reconcile():

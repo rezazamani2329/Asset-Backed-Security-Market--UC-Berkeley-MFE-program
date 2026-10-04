@@ -3,7 +3,7 @@
 UC Berkeley MFE · MFE230M Asset Securitization (ABSM) · Fall 2026 · Final Project, **Track 2**
 **Instructor:** Professor Nancy Wallace, UC Berkeley Haas School of Business
 
-**Team:** Reza Zamani, Al, HS, Coco, Samrajit
+**Team:** Al Yazid Bensaid, Coco Ma, Smarajit Paul Choudhury, Haocheng Sun, Reza Zamani
 
 ## Objective
 Analyze and price Freddie Mac STACR 2026-DNA1 (classes A-1, M-1, M-2) from the
@@ -40,6 +40,7 @@ local. Place them in `data/raw/`:
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 python -m src.clean      # writes data/processed/*.parquet
+python -m src.run_waterfall_pricing  # waterfall + offered-class pricing tables
 pytest                   # run tests
 ```
 

@@ -13,6 +13,8 @@ This note documents the implemented STACR 2026-DNA1 waterfall/pricing core, its 
 - Separate A-1 cumulative-net-loss state
 - Senior/subordinate principal split and sequential allocation
 - A-1 scheduled reduction for payments 1 through 36
+- A-1 senior-principal priority after payment 36
+- Interest-first modification-loss allocation, including retained/deemed-interest pieces
 - Floating-rate interest using decimal SOFR, class spread and actual-day input
 - Optional-call payoff of remaining written-down balance
 - Present value, discount margin, weighted-average life and class-level risk metrics
@@ -32,7 +34,7 @@ The waterfall accepts the existing pool cash-flow schema:
 | `losses` | dollars | Actual net credit-event loss |
 | `recoveries` | dollars | Qualifying recoveries/write-ups |
 | `ending_balance` | dollars | Ending reference-pool UPB |
-| `modification_losses` | dollars | Aggregate modification loss; see limitation below |
+| `modification_losses` | dollars | Current-month interest lost from rate modifications |
 | `distressed_balance` | dollars | Balance used by delinquency test |
 
 The engine validates:
@@ -66,17 +68,9 @@ The engine refuses to combine the current pool with original tranche balances un
 
 ## Explicit limitations
 
-### Modification losses
+### Modification data
 
-The existing collateral output provides one aggregate `modification_losses` column. The PPM requires a special allocation that can reduce interest before principal and treats rate modification, principal forbearance and gains differently. The waterfall raises `NotImplementedError` when the column is non-zero rather than allocating it incorrectly.
-
-Required handoff expansion:
-
-```text
-modification_interest_loss
-modification_principal_loss
-modification_gain
-```
+The current collateral output defines `modification_losses` specifically as interest lost from rate cuts, so the engine can allocate it through the PPM interest-first priority. The handoff does not contain principal-forbearance losses or modification gains; those would need separate fields before they could be modeled.
 
 ### Recovery principal
 
@@ -84,11 +78,26 @@ The upstream `recoveries` field is currently used for capped write-ups. Confirm 
 
 ### Supplemental reduction
 
-The Offered Reference Tranche Percentage test and full Supplemental Reduction Amount are not yet implemented. They require a confirmed current deal state and careful reconciliation with the PPM examples.
+The payment-37 A-1 senior-principal priority is implemented. The separate Offered Reference Tranche Percentage test and full Supplemental Reduction Amount are not; they are not reached by the offered classes in the four supplied scenarios before payoff/call, but should be added for a general-purpose engine.
 
 ### Market comparison
 
 Pricing utilities do not invent a market price. Bloomberg clean price, settlement date and/or observed discount margin are required before computing relative value.
+
+## Run the team scenarios
+
+From the repository root:
+
+```bash
+python -m src.run_waterfall_pricing
+```
+
+This joins `outputs/tables/pool_cf_<scenario>.csv` to Coco's `data/scenarios/pricing_rates.csv`, starts at deal payment 8, and writes:
+
+- `outputs/tables/waterfall_cf_<scenario>.csv`: auditable monthly cash flows for every reference tranche
+- `outputs/tables/tranche_pricing_summary.csv`: offered-class WAL, interest, principal, losses and scenario PVs at explicitly labeled 0/100/200 bp and class-coupon-spread discount margins
+
+The scenario PV columns are sensitivity outputs, not Bloomberg market prices.
 
 ## Tests
 
@@ -102,7 +111,8 @@ Pricing utilities do not invent a market price. Bloomberg clean price, settlemen
 - Initial trigger state
 - Current-pool/original-tranche mismatch guard
 - One-month waterfall reconciliation
-- Modification-loss guard
+- Modification-loss priority and principal/interest split
+- Post-payment-36 A-1 priority
 - Pool cash-flow roll-forward validation
 
 `tests/test_pricing.py` covers:
