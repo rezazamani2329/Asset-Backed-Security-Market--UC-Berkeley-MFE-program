@@ -75,3 +75,17 @@ def test_load_scenarios_reads_coco_format(tmp_path):
     s = load_scenarios(f, n)["base"]
     assert s["hpi"][0] == pytest.approx(1.0) and len(s["hpi"]) == n + 1
     assert s["rate"] == pytest.approx([7.1, 7.2, 7.3])
+
+
+def test_roll_forward_tape_ages_and_rescales_to_snapshot():
+    import pandas as pd
+    from src.collateral_projection import roll_forward_tape
+    tape = pd.DataFrame({"Current Balance": [300.0, 100.0], "Age": [17, 5],
+                         "Months to Maturity": [343, 1], "weight": [0.75, 0.25]})
+    rolled = roll_forward_tape(tape, 396.0, months=1)
+    assert rolled["Current Balance"].sum() == 396.0
+    assert rolled["Current Balance"].tolist() == [297.0, 99.0]
+    assert rolled["Age"].tolist() == [18, 6]
+    assert rolled["Months to Maturity"].tolist() == [342, 1]
+    assert rolled["weight"].tolist() == [0.75, 0.25]
+    assert tape["Current Balance"].tolist() == [300.0, 100.0]

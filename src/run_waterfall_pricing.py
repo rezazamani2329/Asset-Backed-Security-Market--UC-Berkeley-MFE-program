@@ -26,6 +26,22 @@ VALUATION_DATE = pd.Timestamp("2026-10-03")
 STARTING_PAYMENT_NUMBER = 8
 DM_GRID_BPS = (0.0, 100.0, 200.0)
 
+# Deal history through the September 2026 payment, from Bloomberg CLP
+# (STACR_2026-DNA1_Bloomberg_CLP_2026-10-02.xlsx). Cumulative defaults are 0%, so no
+# losses have been allocated. Distressed Principal Balance is approximated as the
+# "Delinq. 60+ %" row (which includes bankruptcy, foreclosure and REO) times the pool
+# balance; recently modified loans are reported only as counts and are omitted.
+INITIAL_CUMULATIVE_LOSS = 0.0
+CLP_HISTORY = (  # (payment month, pool balance in $, 60+ delinquent share)
+    ("2026-04", 20_711_669_000.0, 0.0009),
+    ("2026-05", 20_242_474_000.0, 0.0012),
+    ("2026-06", 19_937_098_000.0, 0.0015),
+    ("2026-07", 19_675_126_000.0, 0.0021),
+    ("2026-08", 19_443_047_000.0, 0.0025),
+    ("2026-09", 19_254_308_000.0, 0.0029),
+)
+INITIAL_DISTRESSED_HISTORY = tuple(balance * share for _, balance, share in CLP_HISTORY)
+
 
 def _load_inputs(pool_path: Path, rates_path: Path, scenario: str) -> tuple[pd.DataFrame, pd.DataFrame]:
     pool = pd.read_csv(pool_path)
@@ -63,6 +79,8 @@ def run_scenario(pool: pd.DataFrame, rates: pd.DataFrame) -> tuple[pd.DataFrame,
         dates=pd.to_datetime(rates["date"]),
         accrual_days=rates["coupon_accrual_days"].to_numpy(float),
         starting_payment_number=STARTING_PAYMENT_NUMBER,
+        initial_cumulative_loss=INITIAL_CUMULATIVE_LOSS,
+        initial_distressed_history=INITIAL_DISTRESSED_HISTORY,
     )
 
     cashflows = pd.concat(

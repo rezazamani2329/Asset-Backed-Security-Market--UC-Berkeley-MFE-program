@@ -44,7 +44,7 @@ Notes on the table:
 
 ## Current balances (after the Sep 2026 payment)
 
-The waterfall starts from today's pool ($19.44bn in the Bloomberg tape), so it needs today's tranche balances, not the closing ones. Haocheng Sun validated the offered-class factors against Bloomberg PDI. The M-1 balance previously used the August factor; the table below uses the September 2026 factor. H twins use the same factor as their offered class, and A-H is the residual that makes the complete stack equal the current pool.
+The waterfall starts from the post-September pool ($19,254,308,000 per Bloomberg CLP; the loan-level tape is post-August at $19.443bn and is rolled forward one month), so it needs today's tranche balances, not the closing ones. Haocheng Sun validated the offered-class factors against Bloomberg PDI. The M-1 balance previously used the August factor; the table below uses the September 2026 factor. H twins use the same factor as their offered class, and A-H is the residual that makes the complete stack equal the current pool.
 
 | Class | Original ($) | Current ($) | Factor |
 |---|---|---|---|

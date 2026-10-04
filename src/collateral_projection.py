@@ -14,7 +14,8 @@ Design decisions to make:
   - Loan-level projection vs. aggregating into rep lines (by coupon / LTV / FICO bucket)
   - Projection horizon: pricing assumes the Feb 2031 call (PPM p. x), so the base
     case runs ~5 years from today; maturity runs are for sensitivity only.
-  - Starting balance: the Bloomberg tape is TODAY's pool ($19.44bn, 56,871 loans), not
+  - Starting balance: the Bloomberg tape is the post-August pool ($19.44bn, 56,871 loans),
+    rolled forward to the post-September $19.25bn by roll_forward_tape; not
     the $22.78bn cut-off (64,434 loans). Start from today and use the 22.78bn only for
     deal ratios (Senior Percentage, cumulative net loss tests).
 """
@@ -55,6 +56,27 @@ def scheduled_principal(balance: np.ndarray, coupon: np.ndarray,
         payment = np.where(r > 0, b * r / (1.0 - (1.0 + r) ** -n_safe), b / n_safe)
     principal = np.where(n <= 1, b, payment - b * r)
     return np.clip(principal, 0.0, b)
+
+
+def roll_forward_tape(loans: pd.DataFrame, target_balance: float, months: int = 1) -> pd.DataFrame:
+    """Age a loan tape by whole months and rescale it to a later reported pool balance.
+
+    INTERIM: the loan-level tape is the post-August pool ($19.443bn) but the valuation
+    state is post-September (Bloomberg CLP: $19.254bn). Until a September loan-level
+    tape is available, every loan ages by ``months`` and every balance is scaled by the
+    same factor so the pool matches the reported total. This assumes the month's
+    paydown was spread pro rata; LTV, FICO and status fields are left as on the tape.
+    """
+    if target_balance <= 0 or months < 0:
+        raise ValueError("target_balance must be positive and months non-negative")
+    out = loans.copy()
+    factor = float(target_balance) / out["Current Balance"].sum()
+    out["Current Balance"] = out["Current Balance"] * factor
+    out["Age"] = out["Age"] + months
+    out["Months to Maturity"] = (out["Months to Maturity"] - months).clip(lower=1)
+    if "weight" in out:
+        out["weight"] = out["Current Balance"] / out["Current Balance"].sum()
+    return out
 
 
 def project_collateral(loans: pd.DataFrame, hpi_path: np.ndarray, rate_path: np.ndarray,

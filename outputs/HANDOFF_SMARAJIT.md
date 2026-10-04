@@ -44,5 +44,5 @@ Losses reach B-2H only in moderate and severe; A-1, M-1 and M-2 take no write-do
 
 1. **SOFR falls to 0% in moderate and severe.** Those paths replay 2006–2011, so `sofr_coupon_decimal` in `pricing_rates.csv` is zero from month 21 (severe) and month 37 (moderate) onward. Note coupons (SOFR + spread, 0% floor on SOFR) drop to roughly the spread.
 2. **Month 1 is a 22-day stub** (2026-10-03 → 2026-10-25). `pricing_rates.csv` uses 22 discount days for month 1 (coupon accrual is the full 30 days from 2026-09-25). The collateral model treats month 1 as a full month, so month-1 prepayments and defaults are about 8 days' worth too high.
-3. **Pool balance vs cut-off.** Projections start from today's tape ($19.44bn); deal ratios (attachment points, cumulative loss tests) use the $22.78bn cut-off balance.
+3. **Pool balance vs cut-off.** Projections start from the post-September pool ($19.254bn per Bloomberg CLP; the $19.44bn post-August tape is rolled forward one month in `src.export_results`); deal ratios (attachment points, cumulative loss tests) use the $22.78bn cut-off balance.
 4. **Discount factors** are the scenario's own SOFR path with no credit spread (`physical_scenario_overnight_no_credit_spread`). Add the tranche spread or solve for the discount margin on top.

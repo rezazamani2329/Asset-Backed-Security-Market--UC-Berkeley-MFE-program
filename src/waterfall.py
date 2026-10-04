@@ -174,13 +174,13 @@ def _allocate_reduction(
     return balances, allocated, remaining
 
 # Balances after the Sep 2026 Payment Date (7th payment), to start the waterfall
-# from the Oct 3 Bloomberg pool. Offered-class factors were validated against
+# from the post-September pool. Offered-class factors were validated against
 # Bloomberg PDI by Haocheng Sun. H twins use the same factor as their offered
 # class; A-H is the residual that makes the full stack equal the current pool.
 # In particular, M-1 uses the Sep factor 0.571984481, not the Aug factor
 # 0.594889779 that appeared in the earlier estimate.
 CURRENT_BALANCES = {
-    "A-H":   18_550_117_630.84,
+    "A-H":   18_361_378_647.06,
     "A-1":      203_476_250.00,   # factor 0.737500
     "A-1H":      10_737_765.47,
     "M-1":      157_810_518.32,   # Bloomberg balance; displayed factor is rounded
@@ -193,7 +193,9 @@ CURRENT_BALANCES = {
     "B-2H":     273_373_818.00,
     "B-3H":      56_953_878.00,
 }
-CURRENT_POOL_BALANCE = 19_443_046_983.78
+# Post-September pool from Bloomberg CLP (reported in $000s). The loan-level tape
+# is post-August ($19,443,046,983.78); src.export_results rolls it forward to this.
+CURRENT_POOL_BALANCE = 19_254_308_000.00
 
 
 def allocate_losses(tranches: list[Tranche], loss: float) -> list[float]:

@@ -31,3 +31,10 @@ def test_price_falls_as_discount_margin_rises():
     _, summary = run_all(ROOT, write_outputs=False)
     assert (summary["price_at_0bp_dm"] > summary["price_at_100bp_dm"]).all()
     assert (summary["price_at_100bp_dm"] > summary["price_at_200bp_dm"]).all()
+
+
+def test_current_state_passes_minimum_credit_enhancement_from_month_one():
+    _, summary = run_all(ROOT, write_outputs=False)
+    assert (summary["starting_subordinate_pct"] >= 0.03525).all()
+    for frame in run_all(ROOT, write_outputs=False)[0].values():
+        assert frame.loc[frame["month"] == 1, "minimum_ce_test"].all()
