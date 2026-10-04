@@ -111,6 +111,9 @@ def run_all(
         output_dir.mkdir(parents=True, exist_ok=True)
         for scenario, frame in cashflow_outputs.items():
             frame.to_csv(output_dir / f"waterfall_cf_{scenario}.csv", index=False)
+        pd.concat(cashflow_outputs.values(), ignore_index=True).to_csv(
+            output_dir / "waterfall_cashflows_all.csv", index=False
+        )
         summary_all.to_csv(output_dir / "tranche_pricing_summary.csv", index=False)
     return cashflow_outputs, summary_all
 
@@ -122,7 +125,7 @@ def main() -> None:
          "price_at_coupon_spread_dm", "total_writedown"]
     ].copy()
     print(display.to_string(index=False, float_format=lambda value: f"{value:,.4f}"))
-    print("\nWrote waterfall cash flows and tranche_pricing_summary.csv to outputs/tables/")
+    print("\nWrote scenario and consolidated waterfall cash flows plus tranche_pricing_summary.csv to outputs/tables/")
 
 
 if __name__ == "__main__":

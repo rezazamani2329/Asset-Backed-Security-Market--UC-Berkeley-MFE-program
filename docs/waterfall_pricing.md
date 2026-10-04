@@ -95,6 +95,7 @@ python -m src.run_waterfall_pricing
 This joins `outputs/tables/pool_cf_<scenario>.csv` to Coco's `data/scenarios/pricing_rates.csv`, starts at deal payment 8, and writes:
 
 - `outputs/tables/waterfall_cf_<scenario>.csv`: auditable monthly cash flows for every reference tranche
+- `outputs/tables/waterfall_cashflows_all.csv`: the four waterfall files combined into one table
 - `outputs/tables/tranche_pricing_summary.csv`: offered-class WAL, interest, principal, losses and scenario PVs at explicitly labeled 0/100/200 bp and class-coupon-spread discount margins
 
 The scenario PV columns are sensitivity outputs, not Bloomberg market prices.
