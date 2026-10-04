@@ -30,7 +30,7 @@
 # 
 # Model parameters are **fitted on Freddie Mac loan-level history** (notebook 05). The `PARAMS` dicts are printed below.
 # 
-# **What you will see (results in brief).** Each function's example confirms the expected economics: monthly rates compound correctly; a 30-year loan amortizes to exactly $0; lower rates speed up prepayment along an S-curve that burns out over time; falling home prices raise LTV, defaults and severity; and the full STACR pool runs from $19.44bn to $7.34bn by the 2031 call in the base case. Losses are 0.17–0.26% of the cut-off balance, around the size of Freddie Mac's retained first-loss piece. A **Result** cell after each section explains its output.
+# **What you will see (results in brief).** Each function's example confirms the expected economics: monthly rates compound correctly; a 30-year loan amortizes to exactly $0; lower rates speed up prepayment along an S-curve that burns out over time; falling home prices raise LTV, defaults and severity; and the full STACR pool runs from $19.25bn (September tape) to $7.27bn by the 2031 call in the base case. Losses are 0.18–0.28% of the cut-off balance, around the size of Freddie Mac's retained first-loss piece. A **Result** cell after each section explains its output.
 
 # In[1]:
 
@@ -458,7 +458,7 @@ plt.tight_layout()
 
 # **Result #11 (fitted).**
 # - **Toy loans, 24 months, HPI −15%, rate 6%.** The $1.2mm pays down mostly through **prepayments** (about $46k in month 1 vs about $1k of scheduled principal). With the fitted 19-month liquidation lag, nothing liquidates until **month 20**. Over 24 months that gives about $19k of credit events, **$11.7k of losses** and $302 of modification losses, ending at $514k. The balance identity holds to within **$0.0000000002**.
-# - **Full STACR pool, base case (plots).** Month 1 has **$409mm of prepayments vs $19mm of scheduled principal**, and prepayments are about **93%** of all principal leaving the pool. The pool pays down **62%, from $19.44bn to $7.34bn**, by the Feb 2031 call. The month-9 spike in credit events is the $47.8mm of loans already seriously delinquent on the tape.
+# - **Full STACR pool, base case (plots).** Month 1 has **$404mm of prepayments vs $19mm of scheduled principal**, and prepayments are about **93%** of all principal leaving the pool. The pool pays down **62%, from $19.25bn to $7.27bn**, by the Feb 2031 call. The month-9 spike in credit events is the $51.9mm of loans already seriously delinquent on the September tape.
 
 # **Q&A · #11 `project_collateral`**
 # 
@@ -499,15 +499,15 @@ pd.DataFrame({name: {
 # 
 # | | good | base | moderate | severe |
 # |---|---|---|---|---|
-# | End balance | $3.22bn | $7.34bn | $4.76bn | $3.46bn |
-# | Credit events | $96mm | $111mm | $109mm | $109mm |
-# | Losses | $39.0mm | $47.6mm | $55.1mm | $60.1mm |
-# | Loss / cut-off | 0.171% | 0.209% | 0.242% | 0.264% |
-# | Avg severity | 40.5% | 42.7% | 50.5% | 55.3% |
+# | End balance | $3.19bn | $7.27bn | $4.72bn | $3.42bn |
+# | Credit events | $102mm | $117mm | $115mm | $114mm |
+# | Losses | $41.4mm | $50.2mm | $58.0mm | $63.0mm |
+# | Loss / cut-off | 0.182% | 0.220% | 0.255% | 0.277% |
+# | Avg severity | 40.6% | 42.7% | 50.4% | 55.1% |
 # 
-# - **Losses are 3–15× the placeholder results** (13× in the base case), driven by the fitted severity (40–55% instead of 3–18%).
-# - **Stress raises losses mostly through severity**, since credit events barely change ($96–111mm). The 19-month lag means only defaults in the first ~34 months liquidate before the 2031 call, and the placeholder stress paths cut rates, so loans prepay away before prices bottom out (see the Try it below).
-# - **Base and moderate stay inside B-3H (0–0.25%)**, and **severe just reaches B-2H** (about $3mm). The offered A-1, M-1 and M-2 notes take **no write-downs**, since M-2B attaches at 1.90%.
+# - **Losses are many times the placeholder results**, driven by the fitted severity (41–55% instead of 3–18%).
+# - **Stress raises losses mostly through severity**, since credit events barely change ($102–117mm). The 19-month lag means only defaults in the first ~34 months liquidate before the 2031 call, and the placeholder stress paths cut rates, so loans prepay away before prices bottom out (see the Try it below).
+# - **Good and base stay inside B-3H (0–0.25%)**, while **moderate and severe just reach B-2H** (about $1mm and $6mm). The offered A-1, M-1 and M-2 notes take **no write-downs**, since M-2B attaches at 1.90%.
 
 # **Try it:** add a scenario `"severe_no_refi"` with HPI to 0.75 but rates at 7.5%. Do losses go up or down vs `severe`, and why? (Hint: who is still in the pool when home prices bottom out?)
 
@@ -536,8 +536,8 @@ pd.DataFrame({name: {
 # | 8 | `calculate_credit_event_rate` | weaker borrower ~4.6× the good one; HPI −20% doubles it; 30-day dq loan ~28% a year |
 # | 9 | `calculate_loss_severity` | 41–55% at today's prices, 57–68% at HPI 0.80; equity helps but doesn't eliminate loss |
 # | 10 | `modification_loss` | effective 0.57 pp cut = $475 a month per $1mm |
-# | 11 | `project_collateral` | identity holds; first new credit events in month 20; ~93% of principal is prepayment; pool −62% by Feb 2031 |
-# | 12 | `run_scenarios` | losses 0.171% / 0.209% / 0.242% / 0.264% of cut-off (good / base / moderate / severe); severe just reaches B-2H; offered notes untouched |
+# | 11 | `project_collateral` | identity holds; first new credit events in month 20; ~93% of principal is prepayment; pool −62% ($19.25bn → $7.27bn) by Feb 2031 |
+# | 12 | `run_scenarios` | losses 0.182% / 0.220% / 0.255% / 0.277% of cut-off (good / base / moderate / severe); moderate and severe just reach B-2H; offered notes untouched |
 # 
 # **Main takeaway.** Calibrated on Freddie history, base-case credit losses on this pool are about 13× the placeholder estimate, because distressed sales lose far more than equity alone suggests. They still stay below the 1.90% subordination that protects the offered notes. The offered notes' main exposure remains **prepayment speed (timing and WAL)**.
 # 

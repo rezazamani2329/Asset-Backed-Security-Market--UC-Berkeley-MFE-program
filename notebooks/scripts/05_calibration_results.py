@@ -316,9 +316,9 @@ pd.concat({"placeholder": before, "fitted": after}, axis=1).swaplevel(axis=1)[co
 
 
 # **Result · What changed for STACR.** With the same interim scenarios (built around today's 7.28% PMMS):
-# - **Prepayment** is a little faster with the fitted parameters (base year-1 CPR 8.1% vs 6.3%), mainly because the fitted seasoning ramp is 6 months instead of 30.
-# - **Credit events** are in a similar range ($110–137mm fitted vs $98–172mm placeholder). The higher base rate, milder LTV effect and 57% non-liquidation share roughly offset.
-# - **Losses are 2–16× higher** (about 13× in the base case): $44–78mm instead of $3–36mm, or **0.19–0.34%** of cut-off instead of 0.01–0.16%, because severity is now **40–57%** instead of 3–21%.
+# - **Prepayment** is a little faster with the fitted parameters (base year-1 CPR 8.1% vs 6.6%), mainly because the fitted seasoning ramp is 6 months instead of 30.
+# - **Credit events** are in a similar range ($116–143mm fitted vs $104–176mm placeholder). The higher base rate, milder LTV effect and 57% non-liquidation share roughly offset.
+# - **Losses are 2–17× higher** (about 13× in the base case): $46–81mm instead of $3–36mm, or **0.20–0.36%** of cut-off instead of 0.01–0.16%, because severity is now **40–57%** instead of 3–21%.
 # - Base stays just inside B-3H (0–0.25%); **moderate and severe now reach B-2H**. A-1, M-1 and M-2 are still untouched.
 
 # **Q&A · What changed for STACR**
@@ -327,10 +327,10 @@ pd.concat({"placeholder": before, "fitted": after}, axis=1).swaplevel(axis=1)[co
 # A: It temporarily loads the placeholder parameters, runs the four scenarios, restores the fitted parameters, runs them again, and shows the results side by side. The scenario paths are the same, so every difference comes from the parameters.
 # 
 # **Q: Which parameter change matters most?**
-# A: Severity, by far. Credit events are in a similar range, but each liquidated dollar now loses 40–57% instead of 3–21%. That's why losses rise 2–16×.
+# A: Severity, by far. Credit events are in a similar range, but each liquidated dollar now loses 40–57% instead of 3–21%. That's why losses rise 2–17×.
 # 
 # **Q: Does calibration change the investment conclusion?**
-# A: Not for the offered notes: even severe losses (0.34%) stay far below the 1.90% where M-2B starts taking losses. It does change the story for Freddie's retained B-3H, which is mostly or fully used in every scenario.
+# A: Not for the offered notes: even severe losses (0.36%) stay far below the 1.90% where M-2B starts taking losses. It does change the story for Freddie's retained B-3H, which is mostly or fully used in every scenario.
 
 # In[11]:
 
@@ -343,15 +343,15 @@ print(f"base HPI path at today's PMMS {today:.2f}%: CPR yr 1 {pp.smm_to_cpr(smm[
       f"end balance ${df.ending_balance.iloc[-1]/1e9:.2f}bn, losses {df.losses.sum()/cp.CUTOFF_BALANCE:.3%} of cut-off")
 
 
-# **Result · Today's rates.** This cell cross-checks the base case with a slightly different home-price path (linear to +15%). At **7.28% PMMS** the pool is about 0.5 pp **out of the money**: CPR is about **8%**, the pool is still **$12.6bn** at the 2031 call, and losses are 0.231% of cut-off, close to the interim base path's 0.24%. The interim scenarios in `collateral_projection.placeholder_scenarios` now start from this rate, until Coco's paths replace them.
+# **Result · Today's rates.** This cell cross-checks the base case with a slightly different home-price path (linear to +15%). At **7.28% PMMS** the pool is about 0.5 pp **out of the money**: CPR is about **8%**, the pool is still **$12.5bn** at the 2031 call, and losses are 0.242% of cut-off, close to the interim base path's 0.25%. The interim scenarios in `collateral_projection.placeholder_scenarios` now start from this rate, until Coco's paths replace them.
 
 # **Q&A · Today's rates**
 # 
-# **Q: Why do losses go *up* when rates go up (0.23% here vs 0.21% at the old 6.25% assumption)?**
+# **Q: Why do losses go *up* when rates go up (0.24% here vs 0.22% at the old 6.25% assumption)?**
 # A: At 7.28% the pool is out of the money, so CPR falls to about 8%. More balance stays in the pool for longer, so more loans have time to default and liquidate before the 2031 call. Slower prepayment means more credit exposure.
 # 
 # **Q: What does this mean for the offered notes?**
-# A: A much longer life. The pool is still about $12.6bn at the call vs $7.3bn at 6.25%, so A-1, M-1 and M-2 stay outstanding longer and earn their spread longer, while carrying more time at risk.
+# A: A much longer life. The pool is still about $12.5bn at the call vs $7.3bn at 6.25%, so A-1, M-1 and M-2 stay outstanding longer and earn their spread longer, while carrying more time at risk.
 
 # ## Summary: fitted parameters and what they mean
 # 
@@ -369,6 +369,6 @@ print(f"base HPI path at today's PMMS {today:.2f}%: CPR yr 1 {pp.smm_to_cpr(smm[
 # | costs / sale discount / MI | 10% / 20% / 25% | **10% / 48% / 18.5%** | 17k liquidations |
 # | share never liquidated / rate cut | 25% / 2 pp | **57% / 0.57 pp** effective | 90+ outcomes |
 # 
-# **Bottom line for the project.** On real Freddie history, liquidation losses are much larger than equity alone suggests, so the STACR pool's expected loss rises from about 0.02% to **about 0.24% of cut-off** in the base case (interim scenarios at today's 7.28% PMMS), and to about 0.34% in the severe case. Base stays inside Freddie Mac's retained first-loss piece, stress cases reach B-2H, and all are far below the 1.90% needed to touch M-2B. The rate environment matters more for the offered notes: at today's rate prepayments slow to about 8% CPR and the notes stay outstanding much longer.
+# **Bottom line for the project.** On real Freddie history, liquidation losses are much larger than equity alone suggests, so the STACR pool's expected loss rises from about 0.02% to **about 0.25% of cut-off** in the base case (interim scenarios at today's 7.28% PMMS, September tape), and to about 0.36% in the severe case. Base stays inside Freddie Mac's retained first-loss piece, stress cases reach B-2H, and all are far below the 1.90% needed to touch M-2B. The rate environment matters more for the offered notes: at today's rate prepayments slow to about 8% CPR and the notes stay outstanding much longer.
 # 
 # **Limits.** National (not state) HPI; a single severity curve for all eras; no negative-equity block on refinancing; interim scenario paths until Coco's `scenarios.csv` arrives.

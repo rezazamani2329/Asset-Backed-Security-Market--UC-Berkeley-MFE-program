@@ -74,12 +74,12 @@ pool = pd.read_parquet(ROOT / "data" / "processed" / "stacr_dna1.parquet")
 print(f"{len(pool):,} loans, ${pool['Current Balance'].sum()/1e9:.2f}bn")
 
 
-# **Result · Loaded.** The full STACR pool (56,871 loans, $19.44bn) is in memory. The cells below use a **random sample of 2,000 loans** (`sample`) to keep plots fast. The sample's WA coupon is 6.78%, essentially the pool's 6.76%.
+# **Result · Loaded.** The full STACR pool (56,433 loans, $19.25bn, September tape) is in memory. The cells below use a **random sample of 2,000 loans** (`sample`) to keep plots fast. The sample's WA coupon is 6.76%, the same as the pool's.
 
 # **Q&A · Loading the pool**
 # 
-# **Q: Why use a 2,000-loan sample instead of all 56,871 loans?**
-# A: Every function here returns a matrix of loans × months (53 months), and some cells run it many times (Figure 1 runs 25 rate shocks). A random sample makes that fast while keeping the averages accurate: the sample's WA coupon is 6.78% vs 6.76% for the full pool. Notebook 03 uses the full pool, because the cash flows handed to the waterfall must add up to the real balance.
+# **Q: Why use a 2,000-loan sample instead of all 56,433 loans?**
+# A: Every function here returns a matrix of loans × months (53 months), and some cells run it many times (Figure 1 runs 25 rate shocks). A random sample makes that fast while keeping the averages accurate: the sample's WA coupon is 6.76%, the same as the full pool. Notebook 03 uses the full pool, because the cash flows handed to the waterfall must add up to the real balance.
 # 
 # **Q: Why are the averages weighted by balance?**
 # A: Tranche cash flows and losses are in dollars, so a $1.9mm loan matters ten times more than a $190k loan. A simple average across loans would overweight small loans.
@@ -146,15 +146,15 @@ if inc is not None:
     print("incentive month 1, WA:", np.average(inc[:, 0], weights=sample["Current Balance"]))
 
 
-# **Result · Incentive.** At a 6.25% market rate the sample's WA incentive is **+0.53 pp**, just below the fitted S-curve midpoint (+0.71 pp), on the steep part of the curve. Note that PMMS is now **7.28%** (Oct 2026), which would put the pool about **0.5 pp out of the money** (see notebook 05).
+# **Result · Incentive.** At a 6.25% market rate the sample's WA incentive is **+0.51 pp**, just below the fitted S-curve midpoint (+0.71 pp), on the steep part of the curve. Note that PMMS is now **7.28%** (Oct 2026), which would put the pool about **0.5 pp out of the money** (see notebook 05).
 
 # **Q&A · Refinancing incentive**
 # 
 # **Q: Why measure incentive against the PMMS rate?**
 # A: A borrower refinances into whatever rate lenders offer now. PMMS (Freddie's weekly 30-year survey) is the standard measure of that rate, and the prepayment model was calibrated against PMMS. Scenario rate paths fed into `calculate_cpr` should therefore be PMMS-type 30-year mortgage rates, not Treasury or SOFR rates.
 # 
-# **Q: Why is the WA incentive +0.53 pp, and what is it today?**
-# A: The sample's WA coupon is 6.78%, and this placeholder path assumes a 6.25% market rate: 6.78 − 6.25 = +0.53 pp. At today's PMMS of **7.28%** the incentive is about **−0.50 pp**, so the typical borrower would pay a *higher* rate by refinancing.
+# **Q: Why is the WA incentive +0.51 pp, and what is it today?**
+# A: The sample's WA coupon is 6.76%, and this placeholder path assumes a 6.25% market rate: 6.76 − 6.25 = +0.51 pp. At today's PMMS of **7.28%** the incentive is about **−0.52 pp**, so the typical borrower would pay a *higher* rate by refinancing.
 # 
 # **Q: Why doesn't the model include refinancing costs?**
 # A: They're captured implicitly by the fitted S-curve midpoint of +0.71 pp. Borrowers need roughly that much rate saving before refinancing pays for closing costs and effort, so the curve is steepest there.
@@ -181,7 +181,7 @@ if curve:
 
 # **Result · Figure 1 (WA CPR in month 12 vs incentive, fitted parameters).**
 # - **Out of the money** (rates up 1–3 pp): CPR flattens at about **5.5%**, the fitted turnover floor.
-# - **At 6.25%** (+0.53 pp): about **21% CPR**, in line with the ~23% the pool has actually paid since cut-off.
+# - **At 6.25%** (+0.51 pp): about **21% CPR**, in line with the ~23% the pool has actually paid since cut-off.
 # - **Steep zone**: from 0 to +1 pp, CPR rises **13% → 30%**. A 50 bp rally adds about 8–9 points of CPR, which is the source of the notes' **negative convexity**.
 # - **Peak and roll-over**: CPR tops out at about **38%** around +2 pp and eases to **35.5%** at +3.5 pp because of **burnout**.
 
@@ -241,10 +241,10 @@ else:
     plt.xlabel("month"); plt.ylabel("annualized credit event rate (%)"); plt.legend()
 
 
-# **Result · Figure 2 (annualized default-spell rate by scenario, fitted).** All four start at about **0.50%** a year, vs 0.23% with the placeholders. Both fitted inputs are higher: the base rate (0.40% vs 0.20% a year) and the roll rate of loans 30 days late on the tape (24.5% reach 90+ within 12 months). After month 12 that extra hazard ends and every line steps down to about 0.33–0.40%. Then they diverge:
+# **Result · Figure 2 (annualized default-spell rate by scenario, fitted).** All four start at about **0.44%** a year, vs 0.23% with the placeholders. Both fitted inputs are higher: the base rate (0.40% vs 0.20% a year) and the roll rate of loans 30 days late on the tape (24.5% reach 90+ within 12 months). After month 12 that extra hazard ends and every line steps down to about 0.32–0.39%. Then they diverge:
 # - **good**: falls to about **0.26%**, and **base** to about **0.29%** (rising prices build equity)
-# - **moderate**: edges up to about **0.44%**
-# - **severe**: climbs to about **0.81%** by 2031, about **1.5× base** on average (0.55% vs 0.36%)
+# - **moderate**: edges up to about **0.43%**
+# - **severe**: climbs to about **0.79%** by 2031, about **1.5× base** on average (0.52% vs 0.34%)
 # 
 # The fitted LTV effect is milder than the placeholder's: +4% per LTV point above 80, vs 10% before.
 
@@ -305,10 +305,10 @@ try_run(cm.modification_loss, np.array([1_000_000.0]))
 # ## Results and takeaways (fitted parameters, placeholder scenarios)
 # 
 # - **Conversions**: 6% CPR = 0.51% SMM and 60% CPR = 7.35% SMM. The gap from CPR/12 grows with speed, which is why you must not divide by 12.
-# - **Incentive**: at a 6.25% market rate the pool's WA incentive is **+0.53 pp**, on the steep part of the fitted S-curve. **But PMMS is now 7.28%**, which puts the pool out of the money.
+# - **Incentive**: at a 6.25% market rate the pool's WA incentive is **+0.51 pp**, on the steep part of the fitted S-curve. **But PMMS is now 7.28%**, which puts the pool out of the money.
 # - **Figure 1 (S-curve)**: CPR is flat at the ~5.5% turnover floor when out of the money, rises steeply between 0 and +1.5 pp, and peaks near 38%. The base case gives about **21% CPR**, consistent with the pool's paydown since cut-off.
 # - **MTM LTV**: a 25% home-price decline (severe) pushes WA LTV from 70 to **94**.
-# - **Figure 2 (default spells by scenario)**: about 0.5% a year at first (30-day-late loans rolling), then 0.26–0.29% (good / base), 0.44% (moderate) and 0.81% (severe) by 2031.
+# - **Figure 2 (default spells by scenario)**: about 0.44% a year at first (30-day-late loans rolling), then 0.26–0.29% (good / base), 0.43% (moderate) and 0.79% (severe) by 2031.
 # - **Severity**: **28% / 35% / 54% / 65%** (good / base / moderate / severe). The fitted distressed-sale discount (48%) and 10% costs mean even equity-rich loans lose money when liquidated. This is the biggest change from the placeholders, where severity was 0% in the base case.
 # - **Modification loss**: about $475 a month per $1mm modified.
 # 
