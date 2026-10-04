@@ -226,3 +226,13 @@ def test_same_month_recovery_nets_against_loss():
     out = run(copy_tranches(TRANCHES), _closing_month(10.0, 10.0, recoveries=4.0), call_date=None)
     assert out["B-3H"].loc[0, "writedown"] == pytest.approx(6.0)
     assert sum(frame.loc[0, "writeup"] for frame in out.values()) == 0.0
+
+
+def test_current_tranches_match_the_starting_pool_within_rounding():
+    for pool in (CURRENT_POOL_BALANCE, 19_254_308_000.00):  # exact Clarity, rounded CLP
+        state = current_tranches(pool)
+        assert sum(t.balance for t in state) == pytest.approx(pool, abs=0.01)
+        senior = sum(t.balance for t in state if t.name in ("A-H", "A-1", "A-1H"))
+        assert 1 - senior / pool >= 0.03525
+    with pytest.raises(ValueError, match="payment date"):
+        current_tranches(19_443_046_983.78)  # the post-August pool

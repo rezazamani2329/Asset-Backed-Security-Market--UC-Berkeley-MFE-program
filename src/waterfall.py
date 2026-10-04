@@ -114,13 +114,26 @@ def copy_tranches(tranches: Sequence[Tranche]) -> list[Tranche]:
     return [replace(t) for t in tranches]
 
 
-def current_tranches() -> list[Tranche]:
-    """Return the estimated post-September-2026 tranche state.
+def current_tranches(pool_balance: float | None = None) -> list[Tranche]:
+    """Return the post-September-2026 tranche state.
 
     Current balances are supplied by the team handoff and retain the original
-    legal balances for A-1 scheduling and loss-history caps.
+    legal balances for A-1 scheduling and loss-history caps. When the caller's
+    starting pool balance is given, A-H (the residual) is set so the stack equals
+    it exactly. The pool must be within POOL_BALANCE_TOLERANCE of the September
+    pool: that absorbs Bloomberg's $000 rounding but rejects a pool from another
+    payment date (the August tape is $189mm larger).
     """
-    return [replace(t, balance=CURRENT_BALANCES[t.name]) for t in TRANCHES]
+    balances = dict(CURRENT_BALANCES)
+    if pool_balance is not None:
+        gap = float(pool_balance) - CURRENT_POOL_BALANCE
+        if abs(gap) > POOL_BALANCE_TOLERANCE:
+            raise ValueError(
+                f"Starting pool ${pool_balance:,.2f} is ${gap:,.2f} from the post-September "
+                f"pool ${CURRENT_POOL_BALANCE:,.2f}; pool and class balances must share a payment date"
+            )
+        balances["A-H"] += gap
+    return [replace(t, balance=balances[t.name]) for t in TRANCHES]
 
 
 def _index(tranches: Sequence[Tranche]) -> dict[str, int]:
@@ -180,7 +193,7 @@ def _allocate_reduction(
 # In particular, M-1 uses the Sep factor 0.571984481, not the Aug factor
 # 0.594889779 that appeared in the earlier estimate.
 CURRENT_BALANCES = {
-    "A-H":   18_361_378_647.06,
+    "A-H":   18_361_378_184.82,
     "A-1":      203_476_250.00,   # factor 0.737500
     "A-1H":      10_737_765.47,
     "M-1":      157_810_518.32,   # Bloomberg balance; displayed factor is rounded
@@ -193,9 +206,12 @@ CURRENT_BALANCES = {
     "B-2H":     273_373_818.00,
     "B-3H":      56_953_878.00,
 }
-# Post-September pool from Bloomberg CLP (reported in $000s). The loan-level tape
-# is post-August ($19,443,046,983.78); src.export_results rolls it forward to this.
-CURRENT_POOL_BALANCE = 19_254_308_000.00
+# Post-September pool: sum of Current Actual UPB in Freddie Mac's Clarity loan-level
+# file 26DNA1_20260901_lld.txt (56,433 loans). Bloomberg CLP reports $19,254,308k and
+# the M-1 September factor implies $19,254,307,536.53. The rolled-forward August tape
+# uses the rounded CLP figure, so current_tranches allows up to $1,000 of difference.
+CURRENT_POOL_BALANCE = 19_254_307_537.76
+POOL_BALANCE_TOLERANCE = 1_000.0
 
 
 def allocate_losses(tranches: list[Tranche], loss: float) -> list[float]:

@@ -40,7 +40,12 @@ CLP_HISTORY = (  # (payment month, pool balance in $, 60+ delinquent share)
     ("2026-08", 19_443_047_000.0, 0.0025),
     ("2026-09", 19_254_308_000.0, 0.0029),
 )
-INITIAL_DISTRESSED_HISTORY = tuple(balance * share for _, balance, share in CLP_HISTORY)
+# September is exact: Clarity's Distressed Principal Balance flag (field 89) marks
+# 182 loans with $58,231,937.12 of UPB. Earlier months remain CLP estimates.
+SEPTEMBER_DISTRESSED_BALANCE = 58_231_937.12
+INITIAL_DISTRESSED_HISTORY = tuple(
+    balance * share for _, balance, share in CLP_HISTORY[:-1]
+) + (SEPTEMBER_DISTRESSED_BALANCE,)
 
 
 def _load_inputs(pool_path: Path, rates_path: Path, scenario: str) -> tuple[pd.DataFrame, pd.DataFrame]:
@@ -57,7 +62,7 @@ def _load_inputs(pool_path: Path, rates_path: Path, scenario: str) -> tuple[pd.D
 def run_scenario(pool: pd.DataFrame, rates: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Return long-form tranche cash flows and offered-class metrics."""
     scenario = str(rates["scenario"].iloc[0])
-    state = current_tranches()
+    state = current_tranches(float(pool["beginning_balance"].iloc[0]))
     starting_face = {t.name: t.balance for t in state}
     spreads = {t.name: t.spread_bps for t in state}
     senior = sum(starting_face[n] for n in ("A-H", "A-1", "A-1H"))
