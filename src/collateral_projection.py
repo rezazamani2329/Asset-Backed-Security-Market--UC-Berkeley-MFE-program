@@ -19,6 +19,7 @@ Design decisions to make:
     the $22.78bn cut-off (64,434 loans). Start from today and use the 22.78bn only for
     deal ratios (Senior Percentage, cumulative net loss tests).
 """
+import json
 from pathlib import Path
 
 import numpy as np
@@ -27,6 +28,11 @@ import pandas as pd
 from src import credit_model, prepayment
 
 CUTOFF_BALANCE = 22_781_151_551.84   # PPM; same constant as src/waterfall.py
+PROCESSED = Path(__file__).resolve().parents[1] / "data" / "processed"
+# Valuation state: after the September 2026 payment. Bloomberg CLP
+# (STACR_2026-DNA1_Bloomberg_CLP_2026-10-02.xlsx, "Balance (M)", in $000s).
+SNAPSHOT_AS_OF = "2026-09"
+SNAPSHOT_POOL_BALANCE = 19_254_308_000.00
 CALL_DATE = "2031-02-25"             # Freddie Mac optional call, pricing assumption
 
 COLUMNS = [
@@ -77,6 +83,30 @@ def roll_forward_tape(loans: pd.DataFrame, target_balance: float, months: int = 
     if "weight" in out:
         out["weight"] = out["Current Balance"] / out["Current Balance"].sum()
     return out
+
+
+def _months_between(earlier: str, later: str) -> int:
+    (y0, m0), (y1, m1) = (map(int, earlier.split("-")), map(int, later.split("-")))
+    return (y1 - y0) * 12 + (m1 - m0)
+
+
+def load_pool(processed: Path = PROCESSED) -> pd.DataFrame:
+    """The cleaned STACR tape, aligned to the valuation snapshot (post-September 2026).
+
+    If the tape is older than SNAPSHOT_AS_OF (the original post-August tape), it is rolled
+    forward with roll_forward_tape to SNAPSHOT_POOL_BALANCE. A tape saved with the
+    snapshot's month (see clean.py) is used as is, with no approximation.
+    """
+    pool = pd.read_parquet(processed / "stacr_dna1.parquet")
+    meta = processed / "stacr_dna1_asof.json"
+    as_of = json.loads(meta.read_text())["as_of"] if meta.exists() else "2026-08"
+    behind = _months_between(as_of, SNAPSHOT_AS_OF)
+    if behind < 0:
+        raise ValueError(f"tape ({as_of}) is newer than SNAPSHOT_AS_OF ({SNAPSHOT_AS_OF}); update the snapshot")
+    if behind > 0:
+        pool = roll_forward_tape(pool, SNAPSHOT_POOL_BALANCE, behind)
+    pool.attrs.update({"tape_as_of": as_of, "rolled_forward_months": behind})
+    return pool
 
 
 def project_collateral(loans: pd.DataFrame, hpi_path: np.ndarray, rate_path: np.ndarray,

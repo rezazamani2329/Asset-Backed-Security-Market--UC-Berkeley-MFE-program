@@ -7,7 +7,7 @@
 # 
 # **Process (`src/collateral_projection.py`).**
 # 1. **Scheduled principal**: level-pay amortization. Payment = B·r / (1 − (1+r)⁻ⁿ), and principal = payment − B·r. Checked by hand: $300k, 6.75%, 342 months gives month-1 principal of $290.46.
-# 2. **`project_collateral`, one path.** Each month, in this order so no dollar leaves twice:
+# 2. **`project_collateral`, one path.** The pool is loaded with `load_pool()`: the post-August Bloomberg tape rolled forward one month to the post-September balance of $19.254bn (Bloomberg CLP), so the start matches the tranche balances in the waterfall. A September tape in `data/raw/` (named `..._2026-09.xlsx`) replaces the approximation automatically. Each month, in this order so no dollar leaves twice:
 #    1. *Defaults*: MDR × performing balance enter a 19-month **liquidation pipeline** (fitted median). They stay in the reference pool, counted in `distressed_balance`, which feeds the STACR Delinquency Test. 57% of new default spells never liquidate (cure, modification or payoff in the data); they stay performing at a slightly lower rate.
 #    2. *Scheduled principal* on the remaining performing balance.
 #    3. *Prepayments*: SMM × (balance after scheduled principal).
@@ -69,7 +69,8 @@ def try_run(fn, *args, **kwargs):
 
 
 from src import collateral_projection as cp
-pool = pd.read_parquet(ROOT / "data" / "processed" / "stacr_dna1.parquet")
+pool = cp.load_pool()   # post-September 2026 pool: the August tape rolled forward one month
+print(f"tape as of {pool.attrs['tape_as_of']}, rolled forward {pool.attrs['rolled_forward_months']} month(s)")
 print(f"{len(pool):,} loans, ${pool['Current Balance'].sum()/1e9:.2f}bn")
 print('output columns:', cp.COLUMNS)
 
@@ -77,7 +78,7 @@ print('output columns:', cp.COLUMNS)
 # **Q&A · Loading the pool**
 # 
 # **Q: Why use the full pool here rather than a sample?**
-# A: This notebook produces the cash flows that Smarajit's waterfall allocates to A-1, M-1 and M-2. They must add up to the real reference pool ($19.44bn today), so all 56,871 loans are projected. The code is vectorized, so a 53-month projection still takes about a second.
+# A: This notebook produces the cash flows that Smarajit's waterfall allocates to A-1, M-1 and M-2. They must add up to the real reference pool (the post-September $19.25bn, from the August tape rolled forward one month), so all 56,871 loans are projected. The code is vectorized, so a 53-month projection still takes about a second.
 # 
 # **Q: What are the output columns for?**
 # A: `scheduled_principal` + `prepayments` + `defaults` (balance leaving through credit events) are the principal flows; `losses` drive write-downs; `modification_losses` cut tranche interest; `distressed_balance` feeds the Delinquency Test; `beginning_balance`/`ending_balance` let the waterfall check the Senior Percentage and the clean-up call.
@@ -121,10 +122,10 @@ if cf is not None:
     display(cf.head(12))
 
 
-# **Result · One path (flat HPI, today's 7.28% PMMS, fitted parameters).** The balance identity holds every month (max error < $0.00001), starting at **$19.44bn**.
-# - **Prepayments still dominate, but slowly**: about **$138mm** in month 1 vs **$19mm** of scheduled principal. With the pool about 0.5 pp out of the money, CPR is only about 8%.
-# - **Credit events**: zero in months 1–8, then **$47.8mm in month 9**. Those are the loans already 60+ days late or coded B/F on the tape, liquidating halfway through the 19-month lag, with a **$22.7mm loss** (47% severity). New defaults only start liquidating in month 20.
-# - **`distressed_balance`** starts at about **$55mm**, rises to about $92mm by month 6, drops to about $65mm after the month-9 liquidations, peaks near **$106mm**, and is still about $58mm in 2031, because the slow-paying pool keeps more loans exposed. This column feeds the waterfall's Delinquency Test.
+# **Result · One path (flat HPI, today's 7.28% PMMS, fitted parameters).** The balance identity holds every month (max error < $0.00001), starting at the post-September **$19.25bn**.
+# - **Prepayments still dominate, but slowly**: about **$137mm** in month 1 vs **$19mm** of scheduled principal. With the pool about 0.5 pp out of the money, CPR is only about 8%.
+# - **Credit events**: zero in months 1–8, then **$47.3mm in month 9**. Those are the loans already 60+ days late or coded B/F on the tape, liquidating halfway through the 19-month lag, with a **$22.5mm loss** (48% severity). New defaults only start liquidating in month 20.
+# - **`distressed_balance`** starts at about **$55mm**, rises to about $91mm by month 6, drops to about $64mm after the month-9 liquidations, peaks near **$105mm**, and is still about $58mm in 2031, because the slow-paying pool keeps more loans exposed. This column feeds the waterfall's Delinquency Test.
 # - **`modification_losses`** grow to about **$55k a month** by 2031, still small next to liquidation losses.
 
 # **Q&A · One path, the monthly table**
@@ -190,10 +191,10 @@ if results:
 # 
 # | | month 12 | month 24 | month 36 | month 53 | half paid down by |
 # |---|---|---|---|---|---|
-# | good | $17.1bn | $14.0bn | $10.7bn | **$6.89bn** | month 40 |
-# | base | $17.1bn | $14.2bn | $11.2bn | **$7.40bn** | month 42 |
-# | moderate | $17.7bn | $16.1bn | $14.2bn | **$9.40bn** | month 52 |
-# | severe | $17.6bn | $15.1bn | $11.6bn | **$7.24bn** | month 43 |
+# | good | $16.9bn | $13.8bn | $10.6bn | **$6.82bn** | month 40 |
+# | base | $17.0bn | $14.1bn | $11.0bn | **$7.33bn** | month 42 |
+# | moderate | $17.5bn | $15.9bn | $14.1bn | **$9.30bn** | month 52 |
+# | severe | $17.5bn | $15.0bn | $11.5bn | **$7.16bn** | month 43 |
 # 
 # Prepayment starts slow (year-1 CPR **8–11%**, the pool is out of the money) and speeds up as rates fall: by year 4 CPR is about **24–27%** in every scenario. Moderate pays down slowest because its rates stay near 7.1% for the first two years.
 
@@ -219,8 +220,8 @@ if results:
     } for name, df in results.items()}))
 
 
-# **Result · Losses vs the tranche stack (Coco's scenarios).** Cumulative losses (good / base / moderate / severe) are **$43.9mm / $47.7mm / $65.8mm / $81.6mm**, or **0.193% / 0.210% / 0.289% / 0.358%** of the $22.78bn cut-off balance.
-# - The first-loss piece **B-3H covers 0–0.25%**: good and base stay inside it, while **moderate and severe go into B-2H**, by about $9mm and $25mm.
+# **Result · Losses vs the tranche stack (Coco's scenarios).** Cumulative losses (good / base / moderate / severe) are **$43.4mm / $47.3mm / $65.2mm / $80.8mm**, or **0.191% / 0.207% / 0.286% / 0.354%** of the $22.78bn cut-off balance.
+# - The first-loss piece **B-3H covers 0–0.25%**: good and base stay inside it, while **moderate and severe go into B-2H**, by about $8mm and $24mm.
 # - The offered **M-2B (attaching at 1.90%), M-1 and A-1 still take no write-downs**; the severe loss is about a fifth of M-2B's attachment point.
 # - About $21–24mm of each scenario's loss comes from loans already delinquent on the tape, so it's locked in whatever the scenario.
 
@@ -232,10 +233,10 @@ if results:
 # A: Attachment and detachment points are percentages of the **cut-off** balance ($22.78bn). A tranche is written down only once cumulative losses pass its attachment point. B-3H covers 0–0.25%, B-2H 0.25–1.45%, B-1H 1.45–1.90%, and M-2B starts at 1.90%.
 # 
 # **Q: Why are the offered notes still safe in the severe case?**
-# A: Severe losses are 0.358% of cut-off. They use all of B-3H and about 0.11% (≈$25mm) of B-2H. The offered notes sit behind 1.90% of subordination, about 5.3× the severe loss.
+# A: Severe losses are 0.354% of cut-off. They use all of B-3H and about 0.10% (≈$24mm) of B-2H. The offered notes sit behind 1.90% of subordination, about 5.4× the severe loss.
 # 
 # **Q: How do these compare with the interim flat-7.28% paths?**
-# A: Very close in the stress cases (moderate 0.289% vs 0.292%, severe 0.358% vs 0.345%) and a bit lower in base (0.210% vs 0.236%), because Coco's base has stronger house prices (+22% vs +13%) and falling rates that let loans pay off before they can default.
+# A: Very close in the stress cases (moderate 0.286% vs 0.289%, severe 0.354% vs 0.342%) and a bit lower in base (0.207% vs 0.234%), because Coco's base has stronger house prices (+22% vs +13%) and falling rates that let loans pay off before they can default.
 
 # ## Step 4 · Save the handoff for Smarajit
 
@@ -261,10 +262,10 @@ if results:
 
 # ## Results and takeaways (fitted parameters, Coco's scenarios)
 # 
-# - **The table is consistent**: the balance identity holds every month, and month 1 starts at today's **$19.44bn**.
+# - **The table is consistent**: the balance identity holds every month, and month 1 starts at the post-September **$19.25bn** (August tape rolled forward one month).
 # - **Prepayment starts slow and speeds up**: year-1 CPR is about **8–11%** (the pool is out of the money at 7.28%), rising to about **24–27%** by year 4 as Coco's rates drift down toward 5.4–5.9%.
-# - **Pool runoff to the Feb 2031 call**: **$6.89bn / $7.40bn / $9.40bn / $7.24bn** (good / base / moderate / severe).
-# - **Credit events**: $47.8mm of loans already seriously delinquent liquidate in month 9 (a $21–24mm loss). New defaults start liquidating after the fitted 19-month lag.
-# - **Losses**: **0.193% / 0.210% / 0.289% / 0.358%** of cut-off. Good and base stay inside **B-3H (0–0.25%)**; moderate and severe reach **B-2H**. **A-1, M-1 and M-2 take no write-downs**: M-2B needs cumulative losses above 1.90%, about 5.3× the severe case.
+# - **Pool runoff to the Feb 2031 call**: **$6.82bn / $7.33bn / $9.30bn / $7.16bn** (good / base / moderate / severe).
+# - **Credit events**: $47.3mm of loans already seriously delinquent liquidate in month 9 (a $21–24mm loss). New defaults start liquidating after the fitted 19-month lag.
+# - **Losses**: **0.191% / 0.207% / 0.286% / 0.354%** of cut-off. Good and base stay inside **B-3H (0–0.25%)**; moderate and severe reach **B-2H**. **A-1, M-1 and M-2 take no write-downs**: M-2B needs cumulative losses above 1.90%, about 5.4× the severe case.
 # 
 # **What this means and what's next.** The offered notes remain well protected against credit loss. Their main risk is timing: slow paydown in the first two years (extension), then faster paydown as rates fall. Next: (1) Smarajit runs the waterfall on these tables, discounting with Coco's `pricing_rates.csv`; (2) handle the 22-day first period exactly; (3) add a negative-equity block on refinancing, which matters for the severe path where rates fall while prices drop.
