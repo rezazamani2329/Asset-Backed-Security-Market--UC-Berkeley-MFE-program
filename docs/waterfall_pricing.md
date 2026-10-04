@@ -49,7 +49,7 @@ It also verifies that each month's beginning balance equals the previous month's
 
 ## Current-state inputs
 
-The scenario projections begin with the post-September $19,254,308,000 pool (`CURRENT_POOL_BALANCE`). Offered-class balances after the September 2026 payment have now been validated against Bloomberg PDI and are stored in `CURRENT_BALANCES`; H twins use the matching offered-class factor and A-H is the residual needed to reconcile the stack. The September M-1 factor is 0.571984481. A current-date run should use `current_tranches()` and retain:
+The scenario projections begin with the post-September $19,254,307,537.76 pool (`CURRENT_POOL_BALANCE`). Offered-class balances after the September 2026 payment have now been validated against Bloomberg PDI and are stored in `CURRENT_BALANCES`; H twins use the matching offered-class factor and A-H is the residual needed to reconcile the stack. The September M-1 factor is 0.571984481. A current-date run should use `current_tranches(pool_balance)`, which sets A-H so the stack equals the starting pool and raises if that pool is more than `POOL_BALANCE_TOLERANCE` ($1,000) from the September pool, and retain:
 
 ```text
 name
@@ -76,9 +76,9 @@ The current collateral output defines `modification_losses` specifically as inte
 
 ### Pool snapshot date
 
-The loan-level Bloomberg tape ($19,443,046,983.78, 56,871 loans) is the post-August (payment 6) pool; the August M-1 factor implies exactly 3.525% of the pool paydown since cut-off. The valuation state is post-September (payment 7): Bloomberg CLP (`STACR_2026-DNA1_Bloomberg_CLP_2026-10-02.xlsx`, reported in $000s) gives $19,254,308,000, and `CURRENT_BALANCES` uses the September class factors validated by Haocheng Sun, with A-H as the residual. The starting Subordinate Percentage is 3.525005%, so the Minimum Credit Enhancement Test passes from month 1.
+The projection uses the post-September (payment 7) loan-level tape, `data/raw/STACR_2026_DNA1_A1_Loan_Level_2026-09.xlsx`: Freddie Mac's Clarity loan-level disclosure (`26DNA1_20260901_lld.txt`) converted to the Bloomberg layout, 56,433 loans, $19,254,307,537.76. It matches Bloomberg CLP (`STACR_2026-DNA1_Bloomberg_CLP_2026-10-02.xlsx`, $19,254,308 thousand) and the pool implied by the M-1 September factor. The earlier Bloomberg tape ($19,443,046,983.78, 56,871 loans) is post-August (payment 6); and `CURRENT_BALANCES` uses the September class factors validated by Haocheng Sun, with A-H as the residual. The starting Subordinate Percentage is 3.525005%, so the Minimum Credit Enhancement Test passes from month 1.
 
-**Interim:** `src.export_results` calls `collateral_projection.roll_forward_tape`, which ages every loan one month and scales balances pro rata to the September total. Replace this with a September loan-level tape when available. `notebooks/03_collateral_projection.ipynb` still projects from the unrolled tape; `outputs/pool_cf_*.parquet` were regenerated from the CSVs.
+`collateral_projection.load_pool()` uses a tape saved with the snapshot month as is; `roll_forward_tape` applies only if an older tape is the newest in `data/raw/`. Against the interim roll-forward, the September tape moves offered-class WALs by at most 0.06 years and no offered class is written down in any scenario.
 
 ### Starting trigger history
 
