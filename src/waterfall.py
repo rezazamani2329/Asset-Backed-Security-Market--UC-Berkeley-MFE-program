@@ -3,8 +3,8 @@
 The implementation separates immutable tranche terms from monthly balances.  It
 implements the deal's ordinary loss/write-up order, offered/H pro-rata pairs,
 trigger gate, senior/subordinate principal buckets, A-1 scheduled reduction and
-the February 2031 call.  Modification-loss priority and supplemental reduction
-remain explicit unsupported inputs until their component data is available.
+the February 2031 call.  Defaulted UPB not written down is paid as Recovery
+Principal.  Supplemental reduction remains unsupported.
 
 Sources: ``docs/cashflows.md`` and the cited PPM pages in that document.
 """
@@ -509,11 +509,15 @@ def run(
         loss = _validate_amount(row.losses, "losses")
         modification_loss = _validate_amount(row.modification_losses, "modification_losses")
         recovery = _validate_amount(row.recoveries, "recoveries")
-        cumulative_loss = max(0.0, cumulative_loss + loss + modification_loss - recovery)
+        credit_event_amount = _validate_amount(row.defaults, "defaults")
         distressed_history.append(_validate_amount(row.distressed_balance, "distressed_balance"))
 
+        # PPM p. 196: write-down and write-up amounts are the net of the
+        # Principal Loss Amount and the Principal Recovery Amount.
+        net_writedown = max(loss - recovery, 0.0)
+        net_writeup = max(recovery - loss, 0.0)
         loss_bands = _deal_bands_or_generic(state, LOSS_BANDS, reverse=True)
-        loss_balances, writedowns, excess_loss = _allocate_reduction(state, loss, loss_bands)
+        loss_balances, writedowns, excess_loss = _allocate_reduction(state, net_writedown, loss_bands)
         if excess_loss > 1e-5:
             raise ValueError("Ordinary loss exhausted all eligible tranches")
         state = _apply_state(state, loss_balances, writedowns=writedowns)
@@ -530,8 +534,14 @@ def run(
             for i in range(len(state))
         ]
 
-        writeup_balances, writeups, _ = allocate_writeups(state, recovery)
+        writeup_balances, writeups, _ = allocate_writeups(state, net_writeup)
         state = _apply_state(state, writeup_balances, writeups=writeups)
+
+        # Cumulative Net Loss Percentage (PPM p. 172) counts the Principal Loss
+        # Amount, which includes only the principal-type modification priorities.
+        cumulative_loss = max(
+            0.0, cumulative_loss + loss + sum(modification_principal) - recovery
+        )
 
         if {"A-H", "A-1", "A-1H"}.issubset(_index(state)):
             triggers = trigger_results(
@@ -548,17 +558,18 @@ def run(
         a1_failed = a1_failed or not bool(triggers["a1_cnl"])
 
         stated_principal = _validate_amount(row.scheduled_principal, "scheduled_principal") + _validate_amount(row.prepayments, "prepayments")
-        # The upstream schema has no separate recovery-principal field.  Recoveries
-        # are used for write-ups only until that handoff is clarified.
+        # PPM p. 190: Recovery Principal is the Credit Event Amount (defaulted
+        # UPB) in excess of the Tranche Write-down Amount, plus any write-up.
+        recovery_principal = max(credit_event_amount - net_writedown, 0.0) + net_writeup
         principal_paid = [0.0] * len(state)
-        if stated_principal > 1e-8:
+        if stated_principal + recovery_principal > 1e-8:
             scheduled = (
                 a1_scheduled_reduction(payment_number, original_a1_band)
                 if not a1_failed else 0.0
             )
             residual_paid = allocate_principal(
                 state, stated_principal, bool(triggers["all_pass"]),
-                pool_balance=float(row.beginning_balance), recovery_principal=0.0,
+                pool_balance=float(row.beginning_balance), recovery_principal=recovery_principal,
                 a1_priority=payment_number >= 37 and not a1_failed,
                 a1_scheduled_amount=scheduled,
             )

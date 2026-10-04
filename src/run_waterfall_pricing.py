@@ -12,11 +12,12 @@ they are not represented as observed market prices.
 from __future__ import annotations
 
 from pathlib import Path
+import warnings
 
 import pandas as pd
 
 from src.pricing import price, weighted_average_life
-from src.waterfall import current_tranches, run
+from src.waterfall import MIN_SUBORDINATE_PCT, current_tranches, run
 
 
 SCENARIOS = ("good", "base", "moderate", "severe")
@@ -43,6 +44,18 @@ def run_scenario(pool: pd.DataFrame, rates: pd.DataFrame) -> tuple[pd.DataFrame,
     state = current_tranches()
     starting_face = {t.name: t.balance for t in state}
     spreads = {t.name: t.spread_bps for t in state}
+    senior = sum(starting_face[n] for n in ("A-H", "A-1", "A-1H"))
+    starting_subordinate_pct = 1.0 - senior / float(pool["beginning_balance"].iloc[0])
+    if starting_subordinate_pct < MIN_SUBORDINATE_PCT:
+        # The Bloomberg pool tape and the Bloomberg PDI class factors must
+        # describe the same payment date; otherwise the A-H residual distorts
+        # the Minimum Credit Enhancement Test from the first projected month.
+        warnings.warn(
+            f"{scenario}: starting Subordinate Percentage {starting_subordinate_pct:.4%} "
+            f"is below {MIN_SUBORDINATE_PCT:.3%}; check that the pool balance and "
+            "class balances are as of the same payment date",
+            stacklevel=2,
+        )
     outputs = run(
         state,
         pool,
@@ -71,6 +84,7 @@ def run_scenario(pool: pd.DataFrame, rates: pd.DataFrame) -> tuple[pd.DataFrame,
             "tranche": name,
             "starting_balance": face,
             "coupon_spread_bps": spreads[name],
+            "starting_subordinate_pct": starting_subordinate_pct,
             "total_interest": frame["interest"].sum(),
             "total_principal": principal.sum(),
             "total_writedown": frame["writedown"].sum(),

@@ -197,3 +197,32 @@ def test_pool_balance_must_reconcile():
     })
     with pytest.raises(ValueError, match="roll-forward"):
         run(toy_structure(), pool)
+
+
+def _closing_month(defaults, losses, recoveries=0.0, stated=100_000_000.0):
+    return pd.DataFrame({
+        "month": [1], "beginning_balance": [CUTOFF_BALANCE],
+        "scheduled_principal": [stated], "prepayments": [0.0],
+        "defaults": [defaults], "losses": [losses], "recoveries": [recoveries],
+        "ending_balance": [CUTOFF_BALANCE - stated - defaults],
+        "modification_losses": [0.0], "distressed_balance": [0.0],
+    })
+
+
+def test_recovery_principal_from_defaults_is_paid_senior():
+    stated, defaults, losses = 100_000_000.0, 100.0, 30.0
+    out = run(copy_tranches(TRANCHES), _closing_month(defaults, losses), call_date=None)
+    senior_pct = sum(t.balance for t in TRANCHES if t.name in ("A-H", "A-1", "A-1H")) / CUTOFF_BALANCE
+    principal = {name: frame.loc[0, "principal"] for name, frame in out.items()}
+    # Sources = uses: Stated Principal plus defaulted UPB not written down.
+    assert sum(principal.values()) == pytest.approx(stated + defaults - losses)
+    assert principal["M-1"] + principal["M-1H"] == pytest.approx(stated * (1 - senior_pct))
+    assert out["B-3H"].loc[0, "writedown"] == pytest.approx(losses)
+    ending_stack = sum(frame.loc[0, "ending_balance"] for frame in out.values())
+    assert ending_stack == pytest.approx(CUTOFF_BALANCE - stated - defaults)
+
+
+def test_same_month_recovery_nets_against_loss():
+    out = run(copy_tranches(TRANCHES), _closing_month(10.0, 10.0, recoveries=4.0), call_date=None)
+    assert out["B-3H"].loc[0, "writedown"] == pytest.approx(6.0)
+    assert sum(frame.loc[0, "writeup"] for frame in out.values()) == 0.0

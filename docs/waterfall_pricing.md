@@ -7,7 +7,9 @@ This note documents the implemented STACR 2026-DNA1 waterfall/pricing core, its 
 - Full original reference-tranche stack and offered/H pair definitions
 - Bottom-up ordinary-loss allocation
 - Pro-rata allocation inside A-1/A-1H, M-1/M-1H, M-2A/M-2AH and M-2B/M-2BH
-- Top-down recoveries/write-ups capped by cumulative prior write-downs
+- Top-down recoveries/write-ups capped by cumulative prior write-downs, netted against same-month losses (PPM p. 196)
+- Recovery Principal = defaulted UPB (`defaults`) in excess of the Tranche Write-down Amount, plus any write-up, paid 100% senior (PPM p. 190)
+- Cumulative Net Loss counts credit-event losses and principal-type modification losses only (PPM pp. 172, 188)
 - Minimum credit-enhancement, cumulative-net-loss and delinquency tests
 - Senior Percentage calculated as (A-H + A-1 + A-1H) / pool UPB (96.475% at closing)
 - Separate A-1 cumulative-net-loss state
@@ -72,9 +74,13 @@ The engine refuses to combine the current pool with original tranche balances un
 
 The current collateral output defines `modification_losses` specifically as interest lost from rate cuts, so the engine can allocate it through the PPM interest-first priority. The handoff does not contain principal-forbearance losses or modification gains; those would need separate fields before they could be modeled.
 
-### Recovery principal
+### Pool snapshot date
 
-The upstream `recoveries` field is currently used for capped write-ups. Confirm whether a separate Recovery Principal amount is required for the senior-reduction calculation.
+The $19,443,046,983.78 Bloomberg pool balance reconciles to the post-August (payment 6) state: the August M-1 factor implies exactly 3.525% of the pool paydown since cut-off. `CURRENT_BALANCES` correctly uses the September (payment 7) class factors validated by Haocheng Sun. Because the A-H residual forces the stack to equal the August pool, the starting Subordinate Percentage is 3.4908% and the Minimum Credit Enhancement Test fails in the first projected months. `run_waterfall_pricing` warns when this happens. Fix: start the collateral projection from the post-September reference pool balance (Freddie Mac monthly STACR disclosure) and rerun `python -m src.export_results`.
+
+### Starting trigger history
+
+The runner starts cumulative net loss and the distressed-balance history at zero. Actual values through September 2026 should be supplied via `initial_cumulative_loss` and `initial_distressed_history`.
 
 ### Supplemental reduction
 
@@ -82,7 +88,7 @@ The payment-37 A-1 senior-principal priority is implemented. The separate Offere
 
 ### Market comparison
 
-Pricing utilities do not invent a market price. Bloomberg clean price, settlement date and/or observed discount margin are required before computing relative value.
+Prices are full (dirty) prices per 100 of current face, including accrued interest since September 25 (about 0.10 at valuation). Pricing utilities do not invent a market price. Bloomberg clean price, settlement date and/or observed discount margin are required before computing relative value.
 
 ## Run the team scenarios
 
@@ -115,6 +121,8 @@ The scenario PV columns are sensitivity outputs, not Bloomberg market prices.
 - Modification-loss priority and principal/interest split
 - Post-payment-36 A-1 priority
 - Pool cash-flow roll-forward validation
+- Recovery Principal sources = uses and senior allocation
+- Same-month netting of recoveries against losses
 
 `tests/test_pricing.py` covers:
 

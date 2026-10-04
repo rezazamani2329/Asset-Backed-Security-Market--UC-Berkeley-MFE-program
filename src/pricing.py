@@ -1,7 +1,8 @@
 """Present-value and discount-margin utilities for monthly STACR cash flows.
 
 Rates are decimal annual rates: ``0.04`` means 4%.  Cash flows passed to
-``price`` are amounts per 100 face, so the result is a clean price per 100.
+``price`` are amounts per 100 face, so the result is a full (dirty) price per
+100, including interest accrued since the last payment date.
 """
 from __future__ import annotations
 
@@ -35,7 +36,7 @@ def discount_factors(sofr, dm_bps: float, day_counts=None) -> np.ndarray:
 
 
 def price(cashflows: np.ndarray, sofr: np.ndarray, dm_bps: float, day_counts=None) -> float:
-    """Return price per 100 for monthly cash flows already expressed per 100 face."""
+    """Return full price per 100 for monthly cash flows already expressed per 100 face."""
     cf, rates, days = _arrays(cashflows, sofr, day_counts)
     return float(np.dot(cf, discount_factors(rates, dm_bps, days)))
 
