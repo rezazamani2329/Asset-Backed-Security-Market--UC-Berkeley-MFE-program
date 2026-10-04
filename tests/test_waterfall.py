@@ -4,9 +4,9 @@ import pandas as pd
 import pytest
 
 from src.waterfall import (
-    CUTOFF_BALANCE, TRANCHES, Tranche, a1_scheduled_reduction,
+    CUTOFF_BALANCE, CURRENT_BALANCES, CURRENT_POOL_BALANCE, TRANCHES, Tranche, a1_scheduled_reduction,
     allocate_losses, allocate_principal, allocate_writeups, copy_tranches,
-    cumulative_loss_limit, run, trigger_results,
+    cumulative_loss_limit, current_tranches, run, trigger_results,
 )
 
 
@@ -86,6 +86,16 @@ def test_initial_trigger_state_passes_with_zero_distress():
     assert result["cumulative_loss"]
     assert result["delinquency"]
     assert result["all_pass"]
+
+
+def test_current_balances_reconcile_and_use_september_m1_factor():
+    assert sum(CURRENT_BALANCES.values()) == pytest.approx(CURRENT_POOL_BALANCE, abs=0.02)
+    state = current_tranches()
+    assert sum(t.balance for t in state) == pytest.approx(CURRENT_POOL_BALANCE, abs=0.02)
+    m1 = next(t for t in state if t.name == "M-1")
+    m1h = next(t for t in state if t.name == "M-1H")
+    assert m1.balance / m1.original_balance == pytest.approx(0.571984481, abs=1e-10)
+    assert m1h.balance / m1h.original_balance == pytest.approx(0.571984481, abs=1e-9)
 
 
 def test_real_principal_split_and_pairing_when_triggers_pass():

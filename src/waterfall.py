@@ -153,18 +153,17 @@ def _allocate_reduction(
     return balances, allocated, remaining
 
 # Balances after the Sep 2026 Payment Date (7th payment), to start the waterfall
-# from today's pool ($19,443,046,983.78 in the Bloomberg tape; WA loan age 17 vs 10
-# at cut-off). ESTIMATED by replaying the PPM principal rules (docs/cashflows.md):
-# all triggers passing, no losses to date, total principal = cut-off balance minus
-# today's pool. Senior bucket: A-1 band gets its Appendix G schedule (3.75%/month),
-# A-H gets the rest. Subordinate bucket (3.525%) pays the M-1 band first.
-# Sums exactly to CURRENT_POOL_BALANCE. Check against Bloomberg current factors.
+# from the Oct 3 Bloomberg pool. Offered-class factors were validated against
+# Bloomberg PDI by Haocheng Sun. H twins use the same factor as their offered
+# class; A-H is the residual that makes the full stack equal the current pool.
+# In particular, M-1 uses the Sep factor 0.571984481, not the Aug factor
+# 0.594889779 that appeared in the earlier estimate.
 CURRENT_BALANCES = {
-    "A-H":   18_543_464_711.42,
+    "A-H":   18_550_117_630.85,
     "A-1":      203_476_250.00,   # factor 0.737500
     "A-1H":      10_737_765.47,
-    "M-1":      164_129_951.00,   # factor 0.594889
-    "M-1H":       8_661_398.68,
+    "M-1":      157_810_518.31,   # Sep factor 0.571984481
+    "M-1H":       8_327_912.15,   # same factor as M-1
     "M-2A":      37_850_000.00,   # factor 1.000000
     "M-2AH":      2_017_015.00,
     "M-2B":      37_850_000.00,   # factor 1.000000

@@ -43,9 +43,9 @@ beginning balance - scheduled principal - prepayments - defaults = ending balanc
 
 It also verifies that each month's beginning balance equals the previous month's ending balance.
 
-## Current-state file still required
+## Current-state inputs
 
-The scenario projections begin with the current $19.443bn pool, while the repository only contains original tranche balances. A current-date run needs one row per reference tranche with:
+The scenario projections begin with the current $19.443bn pool. Offered-class balances after the September 2026 payment have now been validated against Bloomberg PDI and are stored in `CURRENT_BALANCES`; H twins use the matching offered-class factor and A-H is the residual needed to reconcile the stack. The September M-1 factor is 0.571984481. A current-date run should use `current_tranches()` and retain:
 
 ```text
 name

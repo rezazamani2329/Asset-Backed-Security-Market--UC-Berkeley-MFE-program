@@ -42,18 +42,18 @@ Notes on the table:
 - M-2A and M-2B can be exchanged into a combined M-2 (SOFR + 1.30%) and into other MACR classes with different coupon/IO splits (Table 2, p. xii). Cash flows are the same as the underlying M-2A/M-2B.
 - Expected WAL at pricing (10% CPR, no losses, called in Feb 2031): A-1 1.59 yr, M-1 1.75 yr, M-2A 4.11 yr, M-2B 4.79 yr (p. x).
 
-## Current balances (after the Sep 2026 payment, estimated)
+## Current balances (after the Sep 2026 payment)
 
-The waterfall starts from today's pool ($19.44bn in the Bloomberg tape), so it needs today's tranche balances, not the closing ones. These are estimated by replaying the principal rules above over the 7 payments since closing (March to September 2026), assuming all triggers passed and no losses so far. They sum exactly to today's pool. To be checked against Bloomberg current factors.
+The waterfall starts from today's pool ($19.44bn in the Bloomberg tape), so it needs today's tranche balances, not the closing ones. Haocheng Sun validated the offered-class factors against Bloomberg PDI. The M-1 balance previously used the August factor; the table below uses the September 2026 factor. H twins use the same factor as their offered class, and A-H is the residual that makes the complete stack equal the current pool.
 
 | Class | Original ($) | Current ($) | Factor |
 |---|---|---|---|
 | A-1 | 275,900,000 | 203,476,250 | 0.7375 |
-| M-1 | 275,900,000 | 164,129,951 | 0.5949 |
+| M-1 | 275,900,000 | 157,810,518 | 0.571984481 |
 | M-2A | 37,850,000 | 37,850,000 | 1.0000 |
 | M-2B | 37,850,000 | 37,850,000 | 1.0000 |
 
-A-1 has paid 26.25% on its fixed schedule. M-1 has taken all of the subordinate principal so far. M-2A and M-2B have not been paid yet because the M classes pay sequentially. The full list, including Freddie's pieces, is `CURRENT_BALANCES` in `src/waterfall.py`.
+A-1 has paid 26.25% on its fixed schedule. M-1 has taken all of the subordinate principal so far. M-2A and M-2B have not been paid yet because the M classes pay sequentially. Bloomberg PDI reports M-1 factors of 0.594889779 for August and 0.571984481 for September; the valuation uses September. The full list, including Freddie's pieces, is `CURRENT_BALANCES` in `src/waterfall.py`.
 
 ## Loss allocation rules
 
