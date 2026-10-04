@@ -89,3 +89,29 @@ def test_roll_forward_tape_ages_and_rescales_to_snapshot():
     assert rolled["Months to Maturity"].tolist() == [342, 1]
     assert rolled["weight"].tolist() == [0.75, 0.25]
     assert tape["Current Balance"].tolist() == [300.0, 100.0]
+
+
+def test_load_pool_rolls_forward_only_an_older_tape(tmp_path):
+    import json
+    from src import collateral_projection as cp
+    tape = pd.DataFrame({"Current Balance": [300.0, 100.0], "Age": [17, 5], "Months to Maturity": [343, 100]})
+    tape.to_parquet(tmp_path / "stacr_dna1.parquet")
+    (tmp_path / "stacr_dna1_asof.json").write_text(json.dumps({"as_of": "2026-08"}))
+    old = cp.load_pool(tmp_path)
+    assert old["Current Balance"].sum() == pytest.approx(cp.SNAPSHOT_POOL_BALANCE)
+    assert old["Age"].tolist() == [18, 6] and old.attrs["rolled_forward_months"] == 1
+    (tmp_path / "stacr_dna1_asof.json").write_text(json.dumps({"as_of": cp.SNAPSHOT_AS_OF}))
+    new = cp.load_pool(tmp_path)
+    assert new["Current Balance"].tolist() == [300.0, 100.0] and new.attrs["rolled_forward_months"] == 0
+
+
+def test_clean_picks_newest_dated_tape(tmp_path):
+    from src import clean
+    for name in ["STACR_2026_DNA1_A1_Loan_Level.xlsx", "STACR_2026_DNA1_A1_Loan_Level_2026-09.xlsx",
+                 "STACR_2026_DNA1_A1_Loan_Level_2026-10.xlsx"]:
+        (tmp_path / name).write_bytes(b"")
+    path, as_of = clean.latest_tape(tmp_path)
+    assert as_of == "2026-10" and path.name.endswith("_2026-10.xlsx")
+    (tmp_path / "STACR_2026_DNA1_A1_Loan_Level_2026-09.xlsx").unlink()
+    (tmp_path / "STACR_2026_DNA1_A1_Loan_Level_2026-10.xlsx").unlink()
+    assert clean.latest_tape(tmp_path)[1] == clean.DEFAULT_AS_OF

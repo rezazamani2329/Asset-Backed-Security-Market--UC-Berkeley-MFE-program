@@ -23,8 +23,7 @@ N_MONTHS = 53
 # Valuation state is after the September 2026 payment, but the loan-level tape is the
 # post-August pool. Bloomberg CLP (STACR_2026-DNA1_Bloomberg_CLP_2026-10-02.xlsx,
 # "Balance (M)" row, reported in $000s) gives the September pool balance.
-SNAPSHOT_POOL_BALANCE = 19_254_308_000.00
-TAPE_MONTHS_BEHIND = 1
+SNAPSHOT_POOL_BALANCE = cp.SNAPSHOT_POOL_BALANCE   # kept for older imports; see cp.load_pool
 
 PLACEHOLDER = {
     "prepayment": {"turnover": 0.06, "refi_max": 0.55, "midpoint": 0.75, "slope": 3.5,
@@ -146,8 +145,7 @@ def figures() -> int:
 def main():
     TABLES.mkdir(parents=True, exist_ok=True)
     FIGURES.mkdir(parents=True, exist_ok=True)
-    pool = pd.read_parquet(ROOT / "data" / "processed" / "stacr_dna1.parquet")
-    pool = cp.roll_forward_tape(pool, SNAPSHOT_POOL_BALANCE, TAPE_MONTHS_BEHIND)
+    pool = cp.load_pool()   # post-September pool: rolled-forward August tape, or a September tape
     scenario_tables(pool)
     params_table()
     calibration_tables()
