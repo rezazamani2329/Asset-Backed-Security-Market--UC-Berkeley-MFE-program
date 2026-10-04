@@ -54,7 +54,7 @@ pool = pd.read_parquet(clean.PROCESSED / "stacr_dna1.parquet")
 pool.head()
 
 
-# **Result · Cleaning.** `clean.py` ran without errors and wrote `data/processed/stacr_dna1.parquet`: **56,871 loans, $19.44bn**. Every Bloomberg row with a Loan ID was kept (no duplicates, no zero balances). The cleaned table adds `dq_bucket` (0 = current), `ever_dq`, and `weight` (each loan's share of pool balance). The only cleaning issue flagged is **20 loans with status codes the map does not cover** (see section 4).
+# **Result · Cleaning.** `clean.py` picked the newest tape, `STACR_2026_DNA1_A1_Loan_Level_2026-09.xlsx` (the post-September pool, converted by Smarajit from Freddie's Clarity loan-level file into the Bloomberg layout), and wrote `data/processed/stacr_dna1.parquet`: **56,433 loans, $19.25bn** ($19,254,307,537.76, matching the Bloomberg CLP). Every row with a Loan ID was kept (no duplicates, no zero balances). The cleaned table adds `dq_bucket` (0 = current), `ever_dq`, and `weight` (each loan's share of pool balance). The only cleaning issue flagged is **8 loans with status codes the map does not cover** (see section 4).
 
 # ## 2. Pool summary (balance-weighted)
 
@@ -85,9 +85,9 @@ summarize(pool).to_frame("stacr_dna1")
 # **Result · Pool summary.**
 # - **Credit quality is strong**: WA FICO **759** and WA DTI **38.5**.
 # - **Low LTV**: original LTV **75.6** (all loans 61–80), HPI-adjusted LTV **70.5**, so borrowers have about 30% equity at today's prices.
-# - **Seasoning**: WA age **17.3 months**: young, but already past the fitted 6-month seasoning ramp (notebook 05), so loans prepay at full speed.
+# - **Seasoning**: WA age **18.3 months**: young, but already past the fitted 6-month seasoning ramp (notebook 05), so loans prepay at full speed.
 # - **Coupons**: WA **6.76%**. That was above the market rate earlier in 2026 (PMMS about 6.05–6.5% from February to June), which explains the fast paydown since cut-off. With PMMS now at **7.28%**, the pool is about 0.5 pp *out of the money*.
-# - **Delinquency**: **0.62%** of balance is 30+ days late.
+# - **Delinquency**: **0.79%** of balance is 30+ days late (up from 0.62% on the August tape).
 
 # ## 3. Distributions that drive your model
 # 
@@ -120,22 +120,22 @@ plt.tight_layout()
 pool['Account Status'].value_counts()
 
 
-# **Result · Status codes.** STACR has **56,465 current** loans, **261** 30-day, **56** 60-day and **69** 90+-day delinquent, plus **16 `B`** and **4 `F`**. `B`/`F` most likely mean bankruptcy and foreclosure (confirm with the Bloomberg field legend). They are only 20 loans, but they are the most likely to become credit events soon. The model currently treats them as seriously delinquent and puts them straight into the liquidation pipeline.
+# **Result · Status codes.** STACR has **55,952 current** loans, **318** 30-day, **78** 60-day and **77** 90+-day delinquent, plus **4 `B`** and **4 `F`**. `B`/`F` most likely mean bankruptcy and foreclosure (confirm with the Bloomberg field legend). They are only 8 loans, but they are the most likely to become credit events soon. The model currently treats them as seriously delinquent and puts them straight into the liquidation pipeline.
 
 # ## 5. Anchor for the base case
 # 
-# The pool was $22.78bn at the Feb 2026 cut-off and is $19.44bn on this tape.
+# The pool was $22.78bn at the Feb 2026 cut-off and is $19.25bn on the September tape.
 # 
 # > Using your `smm_to_cpr`, what CPR does that paydown imply? What else besides prepayment reduced the balance?
 
-# **Result · Anchor.** The pool went from **$22.78bn** at the Feb 2026 cut-off to **$19.44bn** on this tape, a **14.7% paydown** in about 7 months (loan count 64,434 → 56,871, −11.7%). Taking out about 0.1% a month of scheduled principal leaves an SMM of about 2.1%, which is **CPR ≈ 23%**. The base-case prepayment model in notebook 02 should land in the 20–25% range.
+# **Result · Anchor.** The pool went from **$22.78bn** at the Feb 2026 cut-off to **$19.25bn** after the September payment, a **15.5% paydown** over 7 payments (loan count 64,434 → 56,433, −12.4%). Taking out about 0.1% a month of scheduled principal leaves an SMM of about 2.3%, which is **CPR ≈ 24%**. The base-case prepayment model in notebook 02 should land in the 20–25% range.
 
 # ## Results and takeaways
 # 
-# - **Size.** STACR DNA1 has **56,871 loans, $19.44bn** today (down from $22.78bn and 64,434 loans at the Feb 2026 cut-off). Every loan is a fixed-rate 30-year, about 17 months seasoned.
+# - **Size.** STACR DNA1 has **56,433 loans, $19.25bn** after the September 2026 payment (down from $22.78bn and 64,434 loans at the Feb 2026 cut-off). Every loan is a fixed-rate 30-year, about 18 months seasoned (5 loans modified in September restart at age 0 with 40-year terms).
 # - **Credit quality is strong**: WA FICO 759, WA DTI 38.5.
 # - **Low LTV**: original LTV 61–80 (WA 75.6); HPI-adjusted LTV **70.5**. Borrowers have about 30% equity, which lowers default rates, but calibration (notebook 05) shows liquidations still lose about 35–45% even at this LTV. No loans have mortgage insurance, since none is above 80 LTV.
 # - **Coupons** (WA 6.76%) were in the money earlier in 2026, when PMMS was 6.05–6.5%. At today's **7.28%** they are out of the money, so prepayment should slow sharply from the ~23% CPR seen since cut-off. Prepayment is still the dominant risk for timing.
-# - **Delinquency is low**: 0.62% of balance is currently 30+ days delinquent.
-# - **To resolve**: 16 loans coded `B` and 4 coded `F` (most likely bankruptcy and foreclosure; confirm with the Bloomberg legend). The model currently treats them as seriously delinquent.
-# - **Prepayment anchor**: the paydown from $22.78bn to $19.44bn in about 7 months implies roughly **20–25% CPR**, which is the base-case target for notebook 02.
+# - **Delinquency is low**: 0.79% of balance is currently 30+ days delinquent.
+# - **To resolve**: 4 loans coded `B` and 4 coded `F` (most likely bankruptcy and foreclosure; confirm with the Bloomberg legend). The model currently treats them as seriously delinquent.
+# - **Prepayment anchor**: the paydown from $22.78bn to $19.25bn over 7 payments implies roughly **24% CPR**, which is the base-case target for notebook 02.

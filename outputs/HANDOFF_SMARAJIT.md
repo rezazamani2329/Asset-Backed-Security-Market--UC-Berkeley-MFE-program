@@ -33,10 +33,10 @@ Cumulative net loss for the triggers = cumulative `losses` / cut-off balance **$
 
 | | mortgage rate month 12 → 53 | HPI by 2031 | loss % of cut-off |
 |---|---|---|---|
-| good | 6.70% → 5.67% | +32% | 0.193% |
-| base | 6.74% → 5.79% | +22% | 0.210% |
-| moderate | 7.14% → 5.90% | −14% | 0.289% |
-| severe | 7.09% → 5.39% | −21% | 0.358% |
+| good | 6.70% → 5.67% | +32% | 0.204% |
+| base | 6.74% → 5.79% | +22% | 0.221% |
+| moderate | 7.14% → 5.90% | −14% | 0.301% |
+| severe | 7.09% → 5.39% | −21% | 0.371% |
 
 Losses reach B-2H only in moderate and severe; A-1, M-1 and M-2 take no write-downs in any scenario.
 
@@ -44,5 +44,5 @@ Losses reach B-2H only in moderate and severe; A-1, M-1 and M-2 take no write-do
 
 1. **SOFR falls to 0% in moderate and severe.** Those paths replay 2006–2011, so `sofr_coupon_decimal` in `pricing_rates.csv` is zero from month 21 (severe) and month 37 (moderate) onward. Note coupons (SOFR + spread, 0% floor on SOFR) drop to roughly the spread.
 2. **Month 1 is a 22-day stub** (2026-10-03 → 2026-10-25). `pricing_rates.csv` uses 22 discount days for month 1 (coupon accrual is the full 30 days from 2026-09-25). The collateral model treats month 1 as a full month, so month-1 prepayments and defaults are about 8 days' worth too high.
-3. **Pool balance vs cut-off.** Projections start from the post-September pool ($19.254bn per Bloomberg CLP). `collateral_projection.load_pool()` rolls the post-August tape forward one month; a September tape saved as `data/raw/STACR_2026_DNA1_A1_Loan_Level_2026-09.xlsx` replaces the approximation automatically; deal ratios (attachment points, cumulative loss tests) use the $22.78bn cut-off balance.
+3. **Pool balance vs cut-off.** Projections start from the September loan tape (`data/raw/STACR_2026_DNA1_A1_Loan_Level_2026-09.xlsx`, converted from Freddie's Clarity file): 56,433 loans, **$19,254,307,537.76**, matching the Bloomberg CLP. `collateral_projection.load_pool()` uses it directly (no roll-forward). Deal ratios (attachment points, cumulative loss tests) use the $22.78bn cut-off balance.
 4. **Discount factors** are the scenario's own SOFR path with no credit spread (`physical_scenario_overnight_no_credit_spread`). Add the tranche spread or solve for the discount margin on top.
