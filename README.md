@@ -13,6 +13,18 @@ perspective of a consultant advising prospective investors.
 | M-1  | $275.9mm | $157.8mm | 100 bp | 35564UCR6 | U3202CCR9 |
 | M-2 (M-2A + M-2B) | $75.7mm | $75.7mm | 130 bp | 35564UCS4 | U3202CCS7 |
 
+## Findings in brief
+
+- **Losses are small.** The model projects reference-pool losses of 0.20% to 0.37% of the
+  cut-off balance across four scenarios, from a good economy to a 2008-style house-price fall.
+- **The offered notes are not touched.** M-2B, the lowest offered class, starts taking losses
+  only once pool losses pass 1.90% of cut-off (the B-1H, B-2H and B-3H layers Freddie Mac
+  retains), about five times the worst case.
+- **Timing is the real risk.** Market mortgage rates sit above most borrowers' note rates, so
+  few refinance and the pool pays down slowly. M-1 and M-2 extend when rates stay high.
+- A plain-language walk-through of the deal and the model is in the team's beginner guide
+  (shared separately).
+
 ## Team
 
 | Member | Part | Main files |
@@ -87,6 +99,10 @@ Scenarios (Coco): good, base, moderate and severe mortgage-rate and house-price 
 | base     | 10.6% | $7.33bn | 0.22% | 1.40 | 1.20 | 2.43 | 2.82 |
 | moderate |  7.6% | $9.30bn | 0.30% | 1.40 | 1.87 | 3.47 | 3.84 |
 | severe   |  8.0% | $7.17bn | 0.37% | 1.40 | 1.54 | 2.74 | 3.16 |
+| *PPM at issue* | | | | *1.59* | *1.75* | *4.11* | *4.79* |
+
+WALs are in years from the September 2026 payment, so they are shorter than the PPM's
+issue-date WALs. A-1 follows a fixed fast-pay schedule and is retired by month 30 in every scenario.
 
 - No offered class is written down in any scenario. Losses stay inside the B-tranches
   and the main risk to investors is timing: slower prepayment in the moderate case
