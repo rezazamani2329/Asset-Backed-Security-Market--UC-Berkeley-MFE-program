@@ -50,7 +50,8 @@ classes **A-1, M-1 and M-2** (M-2A and M-2B). We:
 | Q2 | How fast will the reference pool prepay and how much will it lose, under different house-price and interest-rate paths? |
 | Q3 | Do those losses reach the offered classes (A-1, M-1, M-2), and if not, what is the main risk to investors? |
 | Q4 | What are the notes' weighted average lives (WALs) and prices across scenarios and discount margins? |
-| Q5 | Which investors should own which class? |
+| Q5 | Do the model's WALs and prices agree with Bloomberg, and is each class cheap or rich? |
+| Q6 | Which investors should own which class? |
 
 ## 3. Hypotheses
 
@@ -60,6 +61,7 @@ classes **A-1, M-1 and M-2** (M-2A and M-2B). We:
 | H2 | The 1.90% of subordination below M-2B absorbs all projected losses, so the offered classes take no write-down. | **Supported.** Zero write-down for A-1, M-1, M-2A and M-2B in all four scenarios. |
 | H3 | Because borrowers pay ~6.76% while market rates are ~7.3%, prepayments are slow and the main risk is **extension**, not credit loss. | **Supported.** Year-1 CPR is 7.6%–10.9%; M-1 and M-2 WALs extend by about a year in the moderate case. |
 | H4 | Because the notes float over SOFR, prices stay near par when the discount margin equals the coupon spread, and value changes come mainly from timing. | **Supported.** Price ≈ 100.10 (par + ~0.10 accrued) for every class at its own spread. |
+| H5 | The model's principal timing and pricing are consistent with the market. | **Supported, with a timing gap for M-2.** Bloomberg WALs fall inside our scenario range; A-1 and M-1 match our base case, while the market prices M-2A and M-2B closer to our moderate (slower) case. |
 
 ## 4. The deal
 
@@ -114,22 +116,26 @@ scenario's total loss.
 
 | Data | Source | Use | In repo? |
 |---|---|---|---|
-| STACR 2026-DNA1 loan-level tape, post-September 2026 (56,433 loans, $19,254,307,537.76) | Freddie Mac Clarity disclosure converted to the Bloomberg layout; matches Bloomberg CLP and the M-1 September factor | Starting pool | No (licensed) |
-| Freddie Mac Single-Family Loan-Level Dataset, sample files, 27 vintages | Freddie Mac | Calibrating prepayment, default and severity | No (licensed) |
-| FHFA purchase-only HPI (`HPIPONM226S`), PMMS 30-year rate (`MORTGAGE30US`), SOFR, Fed funds, 2y and 10y Treasuries | FRED | Mark-to-market LTV, refinance incentive, scenarios, SOFR coupons | Downloadable |
+| STACR 2026-DNA1 loan-level tape, post-September 2026 (56,433 loans, $19,254,307,537.76) | Freddie Mac Clarity disclosure converted to the Bloomberg layout; matches Bloomberg CLP and the M-1 September factor | Starting pool | Yes: `data/raw/STACR_2026_DNA1_A1_Loan_Level_2026-09.xlsx` |
+| STACR 2026-DNA1 loan-level tape, post-August 2026 (56,871 loans) | Bloomberg | Earlier snapshot, kept for reference | Yes: `data/raw/STACR_2026_DNA1_A1_Loan_Level.xlsx` |
+| Freddie Mac Single-Family Loan-Level Dataset, sample files, 27 vintages | Freddie Mac | Calibrating prepayment, default and severity | No: too large for GitHub (download from Freddie Mac) |
+| FHFA purchase-only HPI (`HPIPONM226S`), PMMS 30-year rate (`MORTGAGE30US`) | FRED | Mark-to-market LTV, refinance incentive | Yes: `data/raw/*.csv` |
+| SOFR, Fed funds, 2y and 10y Treasuries (with HPI and PMMS) | FRED | Scenario generation, SOFR coupons | No: `python -m src.scenarios --download` saves them to `data/market/` |
+| Bloomberg market data as of October 2, 2026: DES, PDI, CLP and CFT screens; bid/ask prices, discount margins, WALs, factors and ratings by class | Bloomberg, collected by Haocheng Sun | Validating balances, WALs and prices ([§8.3](#83-validation-against-bloomberg)) | Yes: `data/bloomberg_validation/` |
 | PPM and Capital Contribution Agreement | Freddie Mac | Deal rules | `docs/reference/` |
 | Class factors, September 2026 | Bloomberg, validated by Haocheng Sun | Current class balances | Constants in `src/waterfall.py` |
 
-Licensed files live in `data/raw/` (gitignored):
+Files expected locally:
 
 ```
-data/raw/STACR_2026_DNA1_A1_Loan_Level_YYYY-MM.xlsx   # newest dated tape is used
-data/raw/freddie_sf/sample_orig_YYYY.txt
-data/raw/freddie_sf/sample_perf_YYYY.txt
-data/raw/HPIPONM226S.csv, data/raw/MORTGAGE30US.csv
+data/raw/STACR_2026_DNA1_A1_Loan_Level_YYYY-MM.xlsx   # in the repo; the newest dated tape is used
+data/raw/HPIPONM226S.csv, data/raw/MORTGAGE30US.csv   # in the repo
+data/raw/freddie_sf/sample_orig_YYYY.txt              # not in the repo (too large)
+data/raw/freddie_sf/sample_perf_YYYY.txt              # not in the repo (too large)
+data/market/*.csv                                      # created by src.scenarios --download
 ```
 
-Result tables, figures and pool cash flows are committed. Loan-level rows are not.
+Result tables, figures and pool cash flows are committed as well.
 
 ## 6. Methodology
 
@@ -234,14 +240,15 @@ Given a market price, the discount margin is found by bisection on the price fun
 
 ## 7. Project parts and team
 
-| Part | Owner | Status | Main files |
-|---|---|---|---|
-| 1–2. Deal structure and cash-flow rules | Al Yazid Bensaid | Done | `docs/structure.md`, `docs/cashflows.md` |
-| Loan data cleaning, class factors | Haocheng Sun | Done | `src/clean.py`, `notebooks/01_clean.ipynb` |
-| 3a. Default and prepayment model, calibration, pool projection | Reza Zamani | Done on the September tape | `src/prepayment.py`, `src/credit_model.py`, `src/calibration.py`, `src/freddie.py`, `src/collateral_projection.py`, `src/export_results.py`, notebooks 02–08 |
-| Rate and house-price scenarios | Coco Ma | Done | `src/scenarios.py`, `src/market_data.py`, `data/scenarios/` |
-| 2–3b. Waterfall and pricing | Smarajit Paul Choudhury | Done on the September tape | `src/waterfall.py`, `src/pricing.py`, `src/run_waterfall_pricing.py` |
-| 4. Recommendations, report and slides | Team | In progress | `report/` |
+| Part | Owner | Main files |
+|---|---|---|
+| 1–2. Deal structure and cash-flow rules | Al Yazid Bensaid | `docs/structure.md`, `docs/cashflows.md` |
+| Loan data cleaning, class factors | Haocheng Sun | `src/clean.py`, `notebooks/01_clean.ipynb` |
+| Final validation: output reconciliation tests and Bloomberg market check (factors, WALs, bid/ask, DMs) | Haocheng Sun | `docs/validation.md`, `tests/test_output_validation.py`, `data/bloomberg_validation/` |
+| 3a. Default and prepayment model, calibration, pool projection | Reza Zamani | `src/prepayment.py`, `src/credit_model.py`, `src/calibration.py`, `src/freddie.py`, `src/collateral_projection.py`, `src/export_results.py`, `notebooks/02_prepayment_and_credit_model.ipynb`, `notebooks/03_collateral_projection.ipynb`, `notebooks/04_model_functions_walkthrough.ipynb`, `notebooks/05_calibration_results.ipynb`, `notebooks/06_freddie.ipynb`, `notebooks/07_calibration_step_by_step.ipynb`, `notebooks/08_export_results.ipynb` |
+| Rate and house-price scenarios | Coco Ma | `src/scenarios.py`, `src/market_data.py`, `data/scenarios/` |
+| 2–3b. Waterfall and pricing | Smarajit Paul Choudhury | `src/waterfall.py`, `src/pricing.py`, `src/run_waterfall_pricing.py` |
+| 4. Recommendations, report and slides | Team | `report/` |
 
 **Notebooks** (`notebooks/`, with `.py` copies in `notebooks/scripts/`). Every code cell has a
 markdown note above (what it does) and below (what it shows), plus Q&A.
@@ -315,7 +322,47 @@ M-2B's paydown is pushed out by about a year:
 
 ![M-2B balance, base vs moderate](outputs/figures/codebook_10_m2b_balance_base_vs_moderate.png)
 
-### 8.3 Calibration tables
+### 8.3 Validation against Bloomberg
+
+Haocheng Sun ran a final validation of the saved outputs (`docs/validation.md`).
+
+**Output checks** (`tests/test_output_validation.py`, 16 tests, all passing). For every scenario,
+the tests check that:
+- the pool roll-forward reconciles (`ending = beginning − scheduled − prepayments − defaults`)
+  and starts from the September pool of $19,254,307,537.76;
+- every tranche's balance reconciles month to month, with no negative balances;
+- no offered class is written down;
+- M-1 starts at the September balance of $157,810,518.32, and the starting Subordinate
+  Percentage is at least 3.525%;
+- prices fall as the discount margin rises, and WALs are between 0 and 5 years.
+
+**Model vs. market** (Bloomberg, October 2, 2026; `data/bloomberg_validation/STACR_2026-DNA1_Bloomberg_Market_Data_2026-10-02.xlsx`)
+
+| Class | Current factor | Bloomberg WAL | Our WAL: base (range across scenarios) | Bloomberg bid / ask | Ask DM | Coupon spread | DM on our base cash flows at the ask | Same, moderate |
+|---|---|---|---|---|---|---|---|---|
+| A-1  | 0.7375 | 1.39 | 1.40 (1.40–1.40) | 99.844 / 99.978  | 87 bp  | 85 bp  | 87 bp  | 87 bp  |
+| M-1  | 0.5720 | 1.23 | 1.20 (1.16–1.87) | 99.875 / 100.027 | 98 bp  | 100 bp | 98 bp  | 99 bp  |
+| M-2A | 1.0000 | 2.78 | 2.43 (2.28–3.47) | 99.377 / 99.720  | 141 bp | 130 bp | 142 bp | 139 bp |
+| M-2B | 1.0000 | 3.48 | 2.82 (2.70–3.84) | 98.761 / 99.148  | 157 bp | 130 bp | 162 bp | 154 bp |
+
+"DM on our cash flows" is the discount margin that makes our projected cash flows worth the
+Bloomberg ask price (plus ~0.10–0.11 of accrued interest), using Coco's SOFR path.
+
+- **Balances match.** Bloomberg factors and balances equal the ones the waterfall uses for every
+  class. (One sheet in the Bloomberg workbook still flags M-1 against an older $164.13mm
+  balance; the repository already uses the correct $157.81mm.)
+- **Timing is in range.** Every Bloomberg WAL falls inside our scenario range. A-1 and M-1 match
+  our base case. For M-2A and M-2B, Bloomberg's WAL is longer than our base case and close to our
+  moderate case, so the market is pricing in slower paydown than our base projection.
+- **A-1 and M-1 trade at their coupon spread** (ask DM 87 and 98 bp vs. 85 and 100 bp), priced
+  near par.
+- **M-2A and M-2B trade wider than their 130 bp coupon** (ask DM 141 and 157 bp), at a discount.
+  On our base cash flows, buying M-2B at the ask earns about 162 bp, roughly 5 bp more than
+  Bloomberg's figure, because we expect it to pay back sooner at par. On our moderate cash flows
+  it earns 154 bp. The extra spread compensates for extension risk, not credit risk: no scenario
+  writes M-2 down.
+
+### 8.4 Calibration tables
 
 | File | Content |
 |---|---|
@@ -326,7 +373,7 @@ M-2B's paydown is pushed out by about a year:
 | `calibration_severity_by_ltv.csv` | Observed vs. fitted severity by LTV |
 | `calibration_pipeline_summary.csv` | Time to credit event, liquidation and modification shares |
 
-### 8.4 Cash-flow tables
+### 8.5 Cash-flow tables
 
 | File | Content |
 |---|---|
@@ -382,17 +429,19 @@ companion page Smarajit Paul Choudhury built for this repo; they use the same Se
    so it prepays slowly. In the moderate scenario, where prices fall and rates stay high, M-1
    extends from 1.2 to 1.9 years and M-2B from 2.8 to 3.8 years. The severe scenario extends
    less because rates fall further and refinancing picks up.
-3. **Pricing is near par at the class spread.** Floating coupons keep price ≈ 100.10 at
-   DM = coupon spread. Relative value depends on the market DM, which still has to come from
-   Bloomberg.
+3. **The market agrees on credit and prices extension.** Bloomberg balances match ours and its
+   WALs fall inside our scenario range. A-1 and M-1 trade at their coupon spreads, close to par.
+   M-2A and M-2B trade 11–27 bp wider than their 130 bp coupon, with Bloomberg WALs near our
+   moderate case. On our base case M-2B is slightly cheap (about 162 bp earned at the ask vs.
+   157 bp quoted); on our moderate case it is roughly fair.
 
 **By investor type (draft):**
 - **A-1:** short, stable 1.4-year WAL in every scenario thanks to its fixed pay-down schedule.
   Suits bank and money-market-style buyers who want SOFR floaters with little extension.
 - **M-1:** modest extension risk, the highest-quality mezzanine class. Suits insurers and asset
   managers looking for extra spread with no projected loss.
-- **M-2A / M-2B:** the most spread (130 bp) with the most extension (up to 3.8 years) and price
-  sensitivity. Suits investors who can hold through slower paydown, such as total-return credit
+- **M-2A / M-2B:** the most spread (130 bp coupon, 141–157 bp at the market ask) with the most
+  extension (up to 3.8 years) and price sensitivity. Suits investors who can hold through slower paydown, such as total-return credit
   funds and hedge funds.
 
 ## 11. Limitations and open items
@@ -405,11 +454,15 @@ companion page Smarajit Paul Choudhury built for this repo; they use the same Se
   Later losses cause shorter failures (base: months 21, 28 and 38; moderate and severe: more
   often). This is how the PPM test works, but the single month-9 lump comes from our
   simplification of liquidating the starting pipeline on one date; spreading those
-  liquidations over time would likely smooth it. Earlier notes saying the triggers pass
-  throughout are out of date.
+  liquidations over time would likely smooth it. Notes saying the triggers pass throughout
+  (including `docs/validation.md`, which checks month 1 only) are out of date.
 - Supplemental Reduction Amount and the Offered Reference Tranche Percentage test are not
   implemented. None of the four scenarios reaches them before payoff or the call.
-- No market price or DM yet, so prices are sensitivities rather than a cheap/rich call.
+- The market comparison uses one Bloomberg snapshot (October 2, 2026) and Bloomberg's own
+  prepayment and SOFR assumptions; the Bloomberg historical-price exports (`*_HP_*.xlsx`) came
+  back empty, so there is no price history.
+- `tests/test_scenarios.py` needs the FRED files in `data/market/`; run
+  `python -m src.scenarios --download` first or those tests error.
 - No cures from the liquidation pipeline, and house prices are national rather than regional.
 - Results assume the February 2031 call is exercised.
 
@@ -417,10 +470,11 @@ companion page Smarajit Paul Choudhury built for this repo; they use the same Se
 
 ```
 ├── data/
-│   ├── raw/          # licensed tapes and Freddie SF files (gitignored)
-│   ├── processed/    # cleaned tape (gitignored)
-│   └── scenarios/    # Coco's scenario paths, pricing rates, diagnostics
-├── docs/             # structure.md, cashflows.md, waterfall_pricing.md, reference PDFs
+│   ├── raw/                  # STACR loan tapes, FRED HPI and PMMS (Freddie SF files stay local)
+│   ├── processed/            # cleaned tape (gitignored)
+│   ├── scenarios/            # Coco's scenario paths, pricing rates, diagnostics
+│   └── bloomberg_validation/ # Bloomberg screens and market data, October 2, 2026
+├── docs/             # structure.md, cashflows.md, waterfall_pricing.md, validation.md, reference PDFs
 ├── notebooks/        # 01–08, plus notebooks/scripts/*.py
 ├── outputs/
 │   ├── tables/       # all result CSVs
@@ -442,11 +496,13 @@ python -m src.scenarios --download    # 2. rate and HPI scenarios            -> 
 # 3. calibrate: run notebook 05 (or 07)                                     -> data/processed/freddie/
 python -m src.export_results          # 4. project the pool, tables, figures -> outputs/
 python -m src.run_waterfall_pricing   # 5. waterfall and pricing             -> outputs/tables/
-pytest                                # tests
+pytest                                # all tests
+pytest -q tests/test_output_validation.py   # final output validation only
 ```
 
-Steps 1, 3 and 4 need the licensed files in `data/raw/`. Step 5 runs from the committed
-`outputs/tables/pool_cf_*.csv`, so it works without the raw data.
+Step 1 uses the loan tape in `data/raw/`. Steps 3 and 4 also need the Freddie Mac SF sample
+files, which are not in the repository. Step 5 and the output validation tests run from the
+committed `outputs/tables/`, so they work from a fresh clone.
 
 ## 14. Deliverables
 
