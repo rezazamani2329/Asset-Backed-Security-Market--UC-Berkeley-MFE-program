@@ -240,15 +240,15 @@ Given a market price, the discount margin is found by bisection on the price fun
 
 ## 7. Project parts and team
 
-| Part | Owner | Status | Main files |
-|---|---|---|---|
-| 1–2. Deal structure and cash-flow rules | Al Yazid Bensaid | Done | `docs/structure.md`, `docs/cashflows.md` |
-| Loan data cleaning, class factors | Haocheng Sun | Done | `src/clean.py`, `notebooks/01_clean.ipynb` |
-| Final validation: output reconciliation tests and Bloomberg market check (factors, WALs, bid/ask, DMs) | Haocheng Sun | Done | `docs/validation.md`, `tests/test_output_validation.py`, `data/bloomberg_validation/` |
-| 3a. Default and prepayment model, calibration, pool projection | Reza Zamani | Done on the September tape | `src/prepayment.py`, `src/credit_model.py`, `src/calibration.py`, `src/freddie.py`, `src/collateral_projection.py`, `src/export_results.py`, notebooks 02–08 |
-| Rate and house-price scenarios | Coco Ma | Done | `src/scenarios.py`, `src/market_data.py`, `data/scenarios/` |
-| 2–3b. Waterfall and pricing | Smarajit Paul Choudhury | Done on the September tape | `src/waterfall.py`, `src/pricing.py`, `src/run_waterfall_pricing.py` |
-| 4. Recommendations, report and slides | Team | In progress | `report/` |
+| Part | Owner | Main files |
+|---|---|---|
+| 1–2. Deal structure and cash-flow rules | Al Yazid Bensaid | `docs/structure.md`, `docs/cashflows.md` |
+| Loan data cleaning, class factors | Haocheng Sun | `src/clean.py`, `notebooks/01_clean.ipynb` |
+| Final validation: output reconciliation tests and Bloomberg market check (factors, WALs, bid/ask, DMs) | Haocheng Sun | `docs/validation.md`, `tests/test_output_validation.py`, `data/bloomberg_validation/` |
+| 3a. Default and prepayment model, calibration, pool projection | Reza Zamani | `src/prepayment.py`, `src/credit_model.py`, `src/calibration.py`, `src/freddie.py`, `src/collateral_projection.py`, `src/export_results.py`, notebooks 02–08 |
+| Rate and house-price scenarios | Coco Ma | `src/scenarios.py`, `src/market_data.py`, `data/scenarios/` |
+| 2–3b. Waterfall and pricing | Smarajit Paul Choudhury | `src/waterfall.py`, `src/pricing.py`, `src/run_waterfall_pricing.py` |
+| 4. Recommendations, report and slides | Team | `report/` |
 
 **Notebooks** (`notebooks/`, with `.py` copies in `notebooks/scripts/`). Every code cell has a
 markdown note above (what it does) and below (what it shows), plus Q&A.
