@@ -1,6 +1,6 @@
 # Pricing GSE Credit Risk Transfer Notes — Freddie Mac STACR 2026-DNA1
 
-UC Berkeley MFE · MFE230M Asset Securitization (ABSM) · Fall 2026 · Final Project, **Track 2** (analyze and price an existing deal)
+UC Berkeley MFE · MFE230M Asset Securitization (ABSM) · Fall 2026 · Final Project
 **Instructor:** Professor Nancy Wallace, UC Berkeley Haas School of Business
 **Team:** Al Yazid Bensaid, Coco Ma, Smarajit Paul Choudhury, Haocheng Sun, Reza Zamani
 
