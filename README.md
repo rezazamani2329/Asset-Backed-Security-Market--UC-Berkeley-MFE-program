@@ -8,13 +8,13 @@ UC Berkeley MFE · MFE230M Asset Securitization (ABSM) · Fall 2026 · Final Pro
 
 ## Contents
 
-1. [Purpose](#1-purpose)
-2. [Research questions](#2-research-questions)
-3. [Hypotheses](#3-hypotheses)
-4. [The deal](#4-the-deal)
-5. [Data](#5-data)
-6. [Methodology](#6-methodology)
-7. [Project parts and team](#7-project-parts-and-team)
+1. [Project parts and team](#1-project-parts-and-team)
+2. [Purpose](#2-purpose)
+3. [Research questions](#3-research-questions)
+4. [Hypotheses](#4-hypotheses)
+5. [The deal](#5-the-deal)
+6. [Data](#6-data)
+7. [Methodology](#7-methodology)
 8. [Results: tables](#8-results-tables)
 9. [Results: figures](#9-results-figures)
 10. [Conclusion and recommendations](#10-conclusion-and-recommendations)
@@ -25,7 +25,32 @@ UC Berkeley MFE · MFE230M Asset Securitization (ABSM) · Fall 2026 · Final Pro
 
 ---
 
-## 1. Purpose
+## 1. Project parts and team
+
+| Part | Owner | Main files |
+|---|---|---|
+| 1–2. Deal structure and cash-flow rules | Al Yazid Bensaid | `docs/structure.md`, `docs/cashflows.md` |
+| Loan data cleaning, class factors, and final validation | Haocheng Sun | `src/clean.py`, `notebooks/01_clean.ipynb`, `docs/validation.md`, `tests/test_output_validation.py`, `data/bloomberg_validation/` |
+| 3a. Default and prepayment model, calibration, pool projection | Reza Zamani | `src/prepayment.py`, `src/credit_model.py`, `src/calibration.py`, `src/freddie.py`, `src/collateral_projection.py`, `src/export_results.py`, `notebooks/02_prepayment_and_credit_model.ipynb`, `notebooks/03_collateral_projection.ipynb`, `notebooks/04_model_functions_walkthrough.ipynb`, `notebooks/05_calibration_results.ipynb`, `notebooks/06_freddie.ipynb`, `notebooks/07_calibration_step_by_step.ipynb`, `notebooks/08_export_results.ipynb` |
+| Rate and house-price scenarios | Coco Ma | `src/scenarios.py`, `src/market_data.py`, `data/scenarios/` |
+| 2–3b. Waterfall and pricing | Smarajit Paul Choudhury | `src/waterfall.py`, `src/pricing.py`, `src/run_waterfall_pricing.py` |
+| 4. Recommendations, report and slides | Team | `report/` |
+
+**Notebooks** (`notebooks/`, with `.py` copies in `notebooks/scripts/`). Every code cell has a
+markdown note above (what it does) and below (what it shows), plus Q&A.
+
+| Notebook | Content |
+|---|---|
+| `01_clean` | Load and clean the STACR loan tape |
+| `02_prepayment_and_credit_model` | CPR/SMM, credit-event rate and severity functions |
+| `03_collateral_projection` | Monthly pool projection by scenario |
+| `04_model_functions_walkthrough` | Each model function step by step |
+| `05_calibration_results` | Fitted prepayment, default and severity parameters |
+| `06_freddie` | Freddie Mac loan-level calibration data |
+| `07_calibration_step_by_step` | Calibration walked through one step at a time |
+| `08_export_results` | Run all scenarios and export tables and figures |
+
+## 2. Purpose
 
 Freddie Mac's STACR (Structured Agency Credit Risk) notes transfer mortgage **credit risk**
 from Freddie Mac to private investors. Investors do not buy mortgages. They buy floating-rate
@@ -42,7 +67,7 @@ classes **A-1, M-1 and M-2** (M-2A and M-2B). We:
 
 ![How money moves in a STACR deal](outputs/figures/codebook_03_stacr_money_flow.png)
 
-## 2. Research questions
+## 3. Research questions
 
 | # | Question |
 |---|---|
@@ -53,7 +78,7 @@ classes **A-1, M-1 and M-2** (M-2A and M-2B). We:
 | Q5 | Do the model's WALs and prices agree with Bloomberg, and is each class cheap or rich? |
 | Q6 | Which investors should own which class? |
 
-## 3. Hypotheses
+## 4. Hypotheses
 
 | # | Hypothesis | Verdict |
 |---|---|---|
@@ -63,7 +88,7 @@ classes **A-1, M-1 and M-2** (M-2A and M-2B). We:
 | H4 | Because the notes float over SOFR, prices stay near par when the discount margin equals the coupon spread, and value changes come mainly from timing. | **Supported.** Price ≈ 100.10 (par + ~0.10 accrued) for every class at its own spread. |
 | H5 | The model's principal timing and pricing are consistent with the market. | **Supported, with a timing gap for M-2.** Bloomberg WALs fall inside our scenario range; A-1 and M-1 match our base case, while the market prices M-2A and M-2B closer to our moderate (slower) case. |
 
-## 4. The deal
+## 5. The deal
 
 Source: Private Placement Memorandum (PPM), February 12, 2026, and Capital Contribution
 Agreement, February 17, 2026 (`docs/reference/`). Full write-ups: `docs/structure.md` (Part 1)
@@ -112,7 +137,7 @@ scenario's total loss.
 
 ![Tranche stack filling with losses](outputs/figures/codebook_04_tranche_stack_loss_glass.png)
 
-## 5. Data
+## 6. Data
 
 | Data | Source | Use | In repo? |
 |---|---|---|---|
@@ -137,7 +162,7 @@ data/market/*.csv                                      # created by src.scenario
 
 Result tables, figures and pool cash flows are committed as well.
 
-## 6. Methodology
+## 7. Methodology
 
 ```
  data/raw ─► clean ─► calibrate ─► scenarios ─► project pool ─► waterfall ─► price
@@ -147,11 +172,11 @@ Result tables, figures and pool cash flows are committed as well.
                         .py           (Reza)        (Reza)
 ```
 
-### 6.1 Data cleaning (`src/clean.py`)
+### 7.1 Data cleaning (`src/clean.py`)
 Load the newest STACR tape, standardize fields, compute balance-weighted pool statistics and
 write `data/processed/*.parquet`.
 
-### 6.2 Prepayment model (`src/prepayment.py`)
+### 7.2 Prepayment model (`src/prepayment.py`)
 CPR is a seasoning ramp times a base turnover rate plus an S-curve in refinance incentive
 (borrower coupon minus PMMS), less burnout:
 
@@ -164,7 +189,7 @@ Prepayments come on top of **scheduled principal**, which is small early in a lo
 
 ![Mortgage payment split into interest and principal](outputs/figures/codebook_01_mortgage_payment_interest_vs_principal.png)
 
-### 6.3 Default and severity model (`src/credit_model.py`)
+### 7.3 Default and severity model (`src/credit_model.py`)
 - **Credit events:** Poisson GLM for the monthly default rate on mark-to-market LTV (piecewise,
   steeper above 80), FICO, DTI, investor status, recent 30-day delinquency and a pre-2009
   vintage dummy. Mark-to-market LTV moves with the scenario house-price index.
@@ -177,13 +202,13 @@ Prepayments come on top of **scheduled principal**, which is small early in a lo
 - **Modifications:** 57% of distressed loans are modified with a 0.57 pp rate cut. The lost
   interest is passed to the waterfall as `modification_losses`.
 
-### 6.4 Calibration (`src/calibration.py`, `src/freddie.py`)
+### 7.4 Calibration (`src/calibration.py`, `src/freddie.py`)
 Fit on 27 vintages of the Freddie Mac SF loan-level sample with FRED PMMS and HPI. Prepayment by
 least squares on CPR by incentive bucket; defaults by Poisson GLM with a loan-month exposure
 offset; severity by UPB-weighted least squares on 17,389 actual liquidations (from 22,598
 default spells). Parameters: `outputs/tables/fitted_params.csv`.
 
-### 6.5 Scenarios (`src/scenarios.py`, Coco Ma)
+### 7.5 Scenarios (`src/scenarios.py`, Coco Ma)
 Five monthly factors (short rate, 2y and 10y Treasury, mortgage–10y spread, HPI growth) follow
 AR(1) processes fitted on 2000–2026 data. 20,000 paths are simulated with a 6-month block
 bootstrap of joint residuals, from the October 3, 2026 valuation date to the February 2031 call.
@@ -200,14 +225,14 @@ Outputs: `data/scenarios/scenarios.csv` (mortgage rate and HPI by month) and
 
 ![30-day SOFR paths by scenario](outputs/figures/codebook_06_sofr_paths.png)
 
-### 6.6 Collateral projection (`src/collateral_projection.py`, `src/export_results.py`)
+### 7.6 Collateral projection (`src/collateral_projection.py`, `src/export_results.py`)
 Each month, in order: defaults (default rate × performing balance), scheduled amortization,
 then prepayments (SMM × remaining balance). Output per scenario, months 1–53
 (`outputs/tables/pool_cf_<scenario>.csv`): beginning balance, scheduled principal,
 prepayments, credit events, losses, modification losses, distressed balance and ending
 balance. Column definitions: `outputs/HANDOFF_SMARAJIT.md`.
 
-### 6.7 Waterfall (`src/waterfall.py`, `src/run_waterfall_pricing.py`, Smarajit Paul Choudhury)
+### 7.7 Waterfall (`src/waterfall.py`, `src/run_waterfall_pricing.py`, Smarajit Paul Choudhury)
 Implements the PPM rules from payment 8 onward: bottom-up loss allocation with each offered
 class paired with its H piece; modification losses interest-first; senior/subordinate principal
 split by the triggers; the A-1 reduction schedule and post-payment-36 priority; Recovery
@@ -226,7 +251,7 @@ loss pushes it below the line, and all principal then goes senior until it climb
 
 ![Subordinate Percentage, base scenario](outputs/figures/codebook_07_subordinate_percentage_base.png)
 
-### 6.8 Pricing (`src/pricing.py`)
+### 7.8 Pricing (`src/pricing.py`)
 Each class's monthly cash flows per 100 face are discounted at the scenario's SOFR path plus a
 discount margin (DM). Prices are full (dirty) prices including ~0.10 of accrued interest since
 September 25, 2026. We report WAL and prices at DM = 0, 100 and 200 bp and at DM = the class
@@ -237,31 +262,6 @@ spread.
 Given a market price, the discount margin is found by bisection on the price function:
 
 ![Bisection search for the discount margin](outputs/figures/codebook_14_dm_bisection.png)
-
-## 7. Project parts and team
-
-| Part | Owner | Main files |
-|---|---|---|
-| 1–2. Deal structure and cash-flow rules | Al Yazid Bensaid | `docs/structure.md`, `docs/cashflows.md` |
-| Loan data cleaning, class factors, and final validation | Haocheng Sun | `src/clean.py`, `notebooks/01_clean.ipynb`, `docs/validation.md`, `tests/test_output_validation.py`, `data/bloomberg_validation/` |
-| 3a. Default and prepayment model, calibration, pool projection | Reza Zamani | `src/prepayment.py`, `src/credit_model.py`, `src/calibration.py`, `src/freddie.py`, `src/collateral_projection.py`, `src/export_results.py`, `notebooks/02_prepayment_and_credit_model.ipynb`, `notebooks/03_collateral_projection.ipynb`, `notebooks/04_model_functions_walkthrough.ipynb`, `notebooks/05_calibration_results.ipynb`, `notebooks/06_freddie.ipynb`, `notebooks/07_calibration_step_by_step.ipynb`, `notebooks/08_export_results.ipynb` |
-| Rate and house-price scenarios | Coco Ma | `src/scenarios.py`, `src/market_data.py`, `data/scenarios/` |
-| 2–3b. Waterfall and pricing | Smarajit Paul Choudhury | `src/waterfall.py`, `src/pricing.py`, `src/run_waterfall_pricing.py` |
-| 4. Recommendations, report and slides | Team | `report/` |
-
-**Notebooks** (`notebooks/`, with `.py` copies in `notebooks/scripts/`). Every code cell has a
-markdown note above (what it does) and below (what it shows), plus Q&A.
-
-| Notebook | Content |
-|---|---|
-| `01_clean` | Load and clean the STACR loan tape |
-| `02_prepayment_and_credit_model` | CPR/SMM, credit-event rate and severity functions |
-| `03_collateral_projection` | Monthly pool projection by scenario |
-| `04_model_functions_walkthrough` | Each model function step by step |
-| `05_calibration_results` | Fitted prepayment, default and severity parameters |
-| `06_freddie` | Freddie Mac loan-level calibration data |
-| `07_calibration_step_by_step` | Calibration walked through one step at a time |
-| `08_export_results` | Run all scenarios and export tables and figures |
 
 ## 8. Results: tables
 
