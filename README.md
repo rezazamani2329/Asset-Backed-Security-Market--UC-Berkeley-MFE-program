@@ -1,6 +1,6 @@
 # Pricing GSE Credit Risk Transfer Notes — Freddie Mac STACR 2026-DNA1
 
-UC Berkeley MFE · MFE230M Asset Securitization (ABSM) · Fall 2026 · Final Project, **Track 2** (analyze and price an existing deal)
+UC Berkeley MFE · MFE230M Asset Securitization (ABSM) · Fall 2026 · Final Project
 **Instructor:** Professor Nancy Wallace, UC Berkeley Haas School of Business
 **Team:** Al Yazid Bensaid, Coco Ma, Smarajit Paul Choudhury, Haocheng Sun, Reza Zamani
 
@@ -39,6 +39,8 @@ classes **A-1, M-1 and M-2** (M-2A and M-2B). We:
 2. lay out the cash-flow rules (the waterfall) for the collateral and the notes;
 3. project the reference pool under economic scenarios and price the notes; and
 4. give recommendations by investor type.
+
+![How money moves in a STACR deal](outputs/figures/codebook_03_stacr_money_flow.png)
 
 ## 2. Research questions
 
@@ -103,6 +105,11 @@ cumulative-loss test (≤ 1.00%) holds.
 original LTV 75.6 (all loans 61–80, no mortgage insurance); current LTV 70.5; DTI 38.5; loan age
 18 months; 30+ days delinquent 0.79% of balance.
 
+**Losses fill the stack from the bottom.** Heights are to scale; the shaded part is the severe
+scenario's total loss.
+
+![Tranche stack filling with losses](outputs/figures/codebook_04_tranche_stack_loss_glass.png)
+
 ## 5. Data
 
 | Data | Source | Use | In repo? |
@@ -147,6 +154,10 @@ CPR is a seasoning ramp times a base turnover rate plus an S-curve in refinance 
 Fitted: turnover 5.5%, maximum refinance add-on 41.4%, S-curve midpoint 0.71 pp of incentive,
 seasoning ramp about 6 months.
 
+Prepayments come on top of **scheduled principal**, which is small early in a loan's life:
+
+![Mortgage payment split into interest and principal](outputs/figures/codebook_01_mortgage_payment_interest_vs_principal.png)
+
 ### 6.3 Default and severity model (`src/credit_model.py`)
 - **Credit events:** Poisson GLM for the monthly default rate on mark-to-market LTV (piecewise,
   steeper above 80), FICO, DTI, investor status, recent 30-day delinquency and a pre-2009
@@ -181,6 +192,8 @@ bootstrap of joint residuals, from the October 3, 2026 valuation date to the Feb
 Outputs: `data/scenarios/scenarios.csv` (mortgage rate and HPI by month) and
 `data/scenarios/pricing_rates.csv` (SOFR coupon fixings and discount factors).
 
+![30-day SOFR paths by scenario](outputs/figures/codebook_06_sofr_paths.png)
+
 ### 6.6 Collateral projection (`src/collateral_projection.py`, `src/export_results.py`)
 Each month, in order: defaults (default rate × performing balance), scheduled amortization,
 then prepayments (SMM × remaining balance). Output per scenario, months 1–53
@@ -195,11 +208,29 @@ split by the triggers; the A-1 reduction schedule and post-payment-36 priority; 
 Principal on defaults; and the February 2031 call. Starting trigger history uses Bloomberg CLP
 delinquency data. Details: `docs/waterfall_pricing.md`.
 
+**Worked example, base month 9.** A $23.31mm credit-event loss lands in B-3H only, and the
+trigger gate decides how that month's principal is split:
+
+![Base month 9 loss allocation](outputs/figures/codebook_11_month9_loss_allocation.png)
+
+![Base month 9 principal split](outputs/figures/codebook_12_month9_principal_split.png)
+
+The Subordinate Percentage sits exactly on the 3.525% minimum while the triggers pass. Each
+loss pushes it below the line, and all principal then goes senior until it climbs back:
+
+![Subordinate Percentage, base scenario](outputs/figures/codebook_07_subordinate_percentage_base.png)
+
 ### 6.8 Pricing (`src/pricing.py`)
 Each class's monthly cash flows per 100 face are discounted at the scenario's SOFR path plus a
 discount margin (DM). Prices are full (dirty) prices including ~0.10 of accrued interest since
 September 25, 2026. We report WAL and prices at DM = 0, 100 and 200 bp and at DM = the class
 spread.
+
+![M-2B base cash flows and present values](outputs/figures/codebook_13_m2b_cash_flows_present_value.png)
+
+Given a market price, the discount margin is found by bisection on the price function:
+
+![Bisection search for the discount margin](outputs/figures/codebook_14_dm_bisection.png)
 
 ## 7. Project parts and team
 
@@ -242,6 +273,10 @@ All tables are in `outputs/tables/`.
 Every scenario starts from the same $19.25bn pool. The worst-case loss (0.37%) uses about a
 fifth of the 1.90% subordination below M-2B.
 
+![Cumulative pool loss against note attachment points](outputs/figures/codebook_05_cumulative_loss_vs_attachment.png)
+
+![Defaulted balance split into loss and recovered](outputs/figures/codebook_02_defaults_loss_vs_recovered.png)
+
 ### 8.2 Offered classes by scenario (`tranche_pricing_summary.csv`)
 
 **WAL (years from the September 2026 payment)**
@@ -271,6 +306,15 @@ Our WALs start from September 2026, so they are shorter than the PPM's issue-dat
 These are sensitivities, not market prices. Longer classes (M-2B) move most per 100 bp of DM.
 All four scenarios are in the CSV.
 
+![Price per 100 against discount margin](outputs/figures/codebook_09_price_vs_discount_margin_base.png)
+
+**Paydown and extension.** Sequential pay retires A-1 and M-1 first; in the moderate scenario
+M-2B's paydown is pushed out by about a year:
+
+![Offered note balances, base scenario](outputs/figures/codebook_08_offered_note_balances_base.png)
+
+![M-2B balance, base vs moderate](outputs/figures/codebook_10_m2b_balance_base_vs_moderate.png)
+
 ### 8.3 Calibration tables
 
 | File | Content |
@@ -293,6 +337,8 @@ All four scenarios are in the CSV.
 ## 9. Results: figures
 
 All figures are in `outputs/figures/`.
+The `codebook_*.png` charts come from the STACR DNA1 Codebook (`stacr-codebook.html`), a
+companion page Smarajit Paul Choudhury built for this repo; they use the same September-tape outputs.
 
 | Figure | What it shows |
 |---|---|
@@ -308,6 +354,7 @@ All figures are in `outputs/figures/`.
 | `05_6_severity_fit.png` | Calibration: observed vs. fitted severity |
 | `01_3_distributions_that_drive_your_model.png` | Pool distributions that drive the model |
 | `04_*.png`, `06_*.png`, `07_*.png` | Step-by-step model and calibration walk-throughs |
+| `codebook_01` … `codebook_14` | Teaching and result charts from Smarajit Paul Choudhury's STACR DNA1 Codebook page, embedded in the sections above: money flow, tranche stack, scheduled principal, SOFR paths, month-9 loss and principal split, Subordinate Percentage, M-2B cash flows, DM bisection, cumulative loss vs. attachment, defaults vs. recoveries, price vs. DM, note balances, M-2B extension |
 
 **Scenario paths**
 
@@ -350,14 +397,16 @@ All figures are in `outputs/figures/`.
 
 ## 11. Limitations and open items
 
-- **The Minimum Credit Enhancement test fails in months 10–12 in every scenario.** The tape's
-  existing 60+ day delinquent loans (about $52mm) are all liquidated together in month 9, the
-  midpoint of the 19-month pipeline, producing a ~$23mm loss that writes down B-3H. That pushes
-  the Subordinate Percentage below 3.525%, so all principal goes senior for three months until
-  the test passes again. It is a real model output, but the single lump comes from our
-  simplification of liquidating the starting pipeline on one date; spreading those liquidations
-  over time would likely smooth it. Earlier notes saying the triggers pass throughout are out
-  of date.
+- **The Minimum Credit Enhancement test fails after losses.** The Subordinate Percentage starts
+  exactly at the 3.525% minimum, so any loss that writes down a B piece fails the test until
+  senior-only principal rebuilds the cushion. The largest failure is months 10–12 in every
+  scenario: the tape's existing 60+ day delinquent loans (about $52mm) are all liquidated
+  together in month 9, the midpoint of the 19-month pipeline, producing a ~$23mm loss in B-3H.
+  Later losses cause shorter failures (base: months 21, 28 and 38; moderate and severe: more
+  often). This is how the PPM test works, but the single month-9 lump comes from our
+  simplification of liquidating the starting pipeline on one date; spreading those
+  liquidations over time would likely smooth it. Earlier notes saying the triggers pass
+  throughout are out of date.
 - Supplemental Reduction Amount and the Offered Reference Tranche Percentage test are not
   implemented. None of the four scenarios reaches them before payoff or the call.
 - No market price or DM yet, so prices are sensitivities rather than a cheap/rich call.
