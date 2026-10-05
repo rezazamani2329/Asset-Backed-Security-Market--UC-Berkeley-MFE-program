@@ -338,7 +338,7 @@ M-2B's paydown is pushed out by about a year:
 
 All figures are in `outputs/figures/`.
 The `codebook_*.png` charts come from the STACR DNA1 Codebook (`stacr-codebook.html`), a
-companion page a teammate built for this repo; they use the same September-tape outputs.
+companion page Smarajit Paul Choudhury built for this repo; they use the same September-tape outputs.
 
 | Figure | What it shows |
 |---|---|
@@ -354,7 +354,7 @@ companion page a teammate built for this repo; they use the same September-tape 
 | `05_6_severity_fit.png` | Calibration: observed vs. fitted severity |
 | `01_3_distributions_that_drive_your_model.png` | Pool distributions that drive the model |
 | `04_*.png`, `06_*.png`, `07_*.png` | Step-by-step model and calibration walk-throughs |
-| `codebook_01` … `codebook_14` | Teaching and result charts from the team's STACR DNA1 Codebook page, embedded in the sections above: money flow, tranche stack, scheduled principal, SOFR paths, month-9 loss and principal split, Subordinate Percentage, M-2B cash flows, DM bisection, cumulative loss vs. attachment, defaults vs. recoveries, price vs. DM, note balances, M-2B extension |
+| `codebook_01` … `codebook_14` | Teaching and result charts from Smarajit Paul Choudhury's STACR DNA1 Codebook page, embedded in the sections above: money flow, tranche stack, scheduled principal, SOFR paths, month-9 loss and principal split, Subordinate Percentage, M-2B cash flows, DM bisection, cumulative loss vs. attachment, defaults vs. recoveries, price vs. DM, note balances, M-2B extension |
 
 **Scenario paths**
 
