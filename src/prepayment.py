@@ -14,6 +14,17 @@ Model (per loan, per month t):
 
 TURNOVER is the floor from home sales when there is no refi incentive.
 
+Mortgage rate lock-in (notebooks/09_lockin.ipynb). A borrower whose rate is below the
+market rate gives up a cheap loan by moving, so home sales (turnover) fall as the gap grows:
+
+    CPR_t = ramp(age_t) * [ TURNOVER * L(gap_t) + REFI_MAX * S(incentive_t) * burnout_t ]
+    gap_t = max(0, market rate_t - loan coupon) = max(0, -incentive_t)
+    L(gap) = exp(-LOCKIN * gap)
+
+LOCKIN = 0 (the default) switches lock-in off, so earlier results are unchanged.
+LOCKIN_FHFA = 0.20 matches FHFA WP 24-03 (each pp of gap cuts the sale probability by
+18.1%: -ln(1 - 0.181) = 0.20); src/calibration.py can estimate it from Freddie data.
+
 PARAMS are FITTED on Freddie Mac Single-Family Loan-Level Dataset history (30y fixed,
 vintages 2000-2026, about 48mm loan-months) against the PMMS 30y rate, by weighted least
 squares on observed SMM by (incentive, age, burnout) bucket. See src/calibration.py and
@@ -29,7 +40,19 @@ PARAMS = {                 # FITTED, notebooks/05_calibration_results.ipynb
     "slope": 2.736,        # steepness of the S-curve, per pp
     "burnout": 0.0076,     # decay per pp-month of past incentive
     "ramp_months": 6.2,    # seasoning ramp length (much faster than PSA's 30)
+    "lockin": 0.0,         # lock-in strength per pp of rate gap; 0 = off (see notebook 09)
 }
+
+LOCKIN_FHFA = 0.1997       # -ln(1 - 0.181), FHFA WP 24-03 (Batzer, Coste, Doerner & Seiler 2024)
+
+
+def lockin_multiplier(gap, lockin: float) -> np.ndarray:
+    """Share of normal turnover that survives lock-in: exp(-lockin * max(gap, 0)).
+
+    gap = market mortgage rate - loan coupon, in pp. Loans with a coupon at or above the
+    market rate (gap <= 0) are not locked in and keep full turnover.
+    """
+    return np.exp(-float(lockin) * np.clip(np.asarray(gap, dtype=float), 0.0, None))
 
 
 def calculate_smm(cpr: np.ndarray) -> np.ndarray:
@@ -64,7 +87,8 @@ def calculate_cpr(loans: pd.DataFrame, mortgage_rate: np.ndarray, params: dict =
     age = loans["Age"].to_numpy(dtype=float)[:, None] + np.arange(1, n_months + 1)[None, :]
     ramp = np.minimum(1.0, age / p["ramp_months"])
 
-    return np.clip(ramp * (p["turnover"] + p["refi_max"] * s_curve * burnout), 0.0, 0.99)
+    lock = lockin_multiplier(-inc, p.get("lockin", 0.0))
+    return np.clip(ramp * (p["turnover"] * lock + p["refi_max"] * s_curve * burnout), 0.0, 0.99)
 
 
 def calculate_prepayment(balance: np.ndarray, scheduled_principal: np.ndarray,

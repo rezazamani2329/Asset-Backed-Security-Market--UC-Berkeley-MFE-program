@@ -55,8 +55,22 @@ def _mtm_ltv(panel: pd.DataFrame, upb: pd.Series, hpi: pd.Series | None) -> pd.S
 
 
 # ----------------------------------------------------------------------------- prepayment
+PREPAY_KEYS = ["inc_b", "age_b", "burn_b"]
+
+
 def prepay_buckets(panel: pd.DataFrame, mrate: pd.Series) -> pd.DataFrame:
     """Observed SMM by (incentive, age, burnout) bucket for loans current last month."""
+    return _prepay_rows(panel, mrate).drop(columns="year").groupby(PREPAY_KEYS).sum().reset_index()
+
+
+def prepay_buckets_by_year(panel: pd.DataFrame, mrate: pd.Series) -> pd.DataFrame:
+    """Same buckets, split by calendar year of the observation (for lock-in and
+    out-of-time validation: fit on some years, test on later ones)."""
+    return _prepay_rows(panel, mrate).groupby(["year"] + PREPAY_KEYS).sum().reset_index()
+
+
+def _prepay_rows(panel: pd.DataFrame, mrate: pd.Series) -> pd.DataFrame:
+    """One row per loan-month at risk of prepaying, with its bucket keys and calendar year."""
     p = panel
     inc = p["rate"].to_numpy() - mrate.reindex(p["period"].astype("int64").to_numpy()).to_numpy()
     p = p.assign(inc=inc, pos=np.clip(inc, 0, None))
@@ -82,26 +96,40 @@ def prepay_buckets(panel: pd.DataFrame, mrate: pd.Series) -> pd.DataFrame:
         "w": exposure, "prepaid": prepaid,
         "wi": exposure * lag["prev_inc"], "wa": exposure * (lag["prev_age"].astype(float) + 1),
         "wb": exposure * lag["prev_burn"].fillna(0), "n": 1,
+        "year": (p["period"].astype("int64") // 100).to_numpy(),
     })
-    return d.groupby(["inc_b", "age_b", "burn_b"]).sum().reset_index()
+    return d
 
 
-def combine_prepay(b: pd.DataFrame) -> pd.DataFrame:
-    b = b.groupby(["inc_b", "age_b", "burn_b"]).sum().reset_index()
+def combine_prepay(b: pd.DataFrame, keys=PREPAY_KEYS) -> pd.DataFrame:
+    b = b.groupby(list(keys)).sum().reset_index()
     b = b[b["w"] > 0].copy()
     b["inc"], b["age"], b["burn"] = b["wi"] / b["w"], b["wa"] / b["w"], b["wb"] / b["w"]
     b["smm"] = b["prepaid"] / b["w"]
     return b
 
 
+PREPAY_NAMES = ["turnover", "refi_max", "midpoint", "slope", "burnout", "ramp_months"]
+
+
 def prepay_model_smm(theta, inc, age, burn):
-    turnover, refi_max, midpoint, slope, burnout, ramp = theta
+    """Model SMM for buckets. theta = the 6 prepayment PARAMS, optionally + lockin (7th).
+
+    Same formula as prepayment.calculate_cpr: lock-in scales turnover by
+    exp(-lockin * max(0, -incentive)).
+    """
+    turnover, refi_max, midpoint, slope, burnout, ramp = theta[:6]
+    lockin = theta[6] if len(theta) > 6 else 0.0
+    inc = np.asarray(inc, dtype=float)
     s = 1.0 / (1.0 + np.exp(-slope * (inc - midpoint)))
-    cpr = np.minimum(1.0, age / ramp) * (turnover + refi_max * s * np.exp(-burnout * burn))
+    lock = np.exp(-lockin * np.clip(-inc, 0, None))
+    cpr = np.minimum(1.0, np.asarray(age, dtype=float) / ramp) * (
+        turnover * lock + refi_max * s * np.exp(-burnout * np.asarray(burn, dtype=float)))
     return 1.0 - (1.0 - np.clip(cpr, 0, 0.99)) ** (1 / 12)
 
 
-def fit_prepay(b: pd.DataFrame, min_loans: int = 200) -> dict:
+def fit_prepay(b: pd.DataFrame, min_loans: int = 200, lockin: bool = False) -> dict:
+    """Weighted least squares on bucket SMM. lockin=True also estimates the lock-in strength."""
     b = b[b["n"] >= min_loans]
     sw = np.sqrt(b["w"].to_numpy() / b["w"].sum())
 
@@ -110,9 +138,67 @@ def fit_prepay(b: pd.DataFrame, min_loans: int = 200) -> dict:
 
     x0 = [0.06, 0.55, 0.75, 3.5, 0.02, 30]
     lo, hi = [0.0, 0.05, -1.0, 0.5, 0.0, 3], [0.3, 1.0, 3.0, 15.0, 0.5, 72]
+    names = list(PREPAY_NAMES)
+    if lockin:
+        x0, lo, hi, names = x0 + [0.2], lo + [0.0], hi + [3.0], names + ["lockin"]
     r = least_squares(resid, x0, bounds=(lo, hi))
-    names = ["turnover", "refi_max", "midpoint", "slope", "burnout", "ramp_months"]
     return {k: float(v) for k, v in zip(names, r.x)}
+
+
+def fit_lockin_only(b: pd.DataFrame, base: dict, min_loans: int = 200) -> float:
+    """Estimate only the lock-in strength, holding the other 6 prepayment PARAMS at `base`.
+
+    Useful on a short window (e.g. 2022-2026, when most borrowers were locked in) that has
+    too little refinancing variation to refit the whole S-curve.
+    """
+    b = b[b["n"] >= min_loans]
+    sw = np.sqrt(b["w"].to_numpy() / b["w"].sum())
+    theta0 = [base[k] for k in PREPAY_NAMES]
+
+    def resid(x):
+        return sw * (prepay_model_smm(theta0 + [x[0]], b["inc"], b["age"], b["burn"]) - b["smm"]).to_numpy()
+
+    return float(least_squares(resid, [0.2], bounds=([0.0], [3.0])).x[0])
+
+
+def by_year_to_buckets(b_year: pd.DataFrame, years) -> pd.DataFrame:
+    """Collapse prepay_buckets_by_year() rows for the chosen calendar years into fit buckets."""
+    sel = b_year[b_year["year"].isin(list(years))].drop(columns="year")
+    return combine_prepay(sel)
+
+
+def out_of_time_prepay(b_year: pd.DataFrame, train_years, test_years,
+                       min_loans: int = 200) -> dict:
+    """Fit with and without lock-in on train_years; score both on test_years.
+
+    Returns the two fitted parameter sets and a table by test year (and by rate-gap
+    group) of exposure-weighted observed vs. predicted CPR and the weighted RMSE of SMM.
+    """
+    train = by_year_to_buckets(b_year, train_years)
+    fits = {"no lock-in": fit_prepay(train, min_loans), "lock-in": fit_prepay(train, min_loans, True)}
+    test = combine_prepay(b_year[b_year["year"].isin(list(test_years))], ["year"] + PREPAY_KEYS)
+    test = test[test["n"] >= min_loans].copy()
+    test["gap_group"] = pd.cut(-test["inc"], [-np.inf, 0, 1, 2, np.inf],
+                               labels=["not locked (gap<=0)", "gap 0-1pp", "gap 1-2pp", "gap >2pp"])
+    for name, theta in fits.items():
+        test[f"pred_{name}"] = prepay_model_smm(list(theta.values()), test["inc"], test["age"], test["burn"])
+
+    def score(g):
+        w = g["w"].to_numpy()
+        out = {"loan_months": g["n"].sum(), "observed_cpr": smm_to_cpr_scalar(np.average(g["smm"], weights=w))}
+        for name in fits:
+            pred = g[f"pred_{name}"].to_numpy()
+            out[f"cpr_{name}"] = smm_to_cpr_scalar(np.average(pred, weights=w))
+            out[f"rmse_smm_{name}"] = float(np.sqrt(np.average((pred - g["smm"]) ** 2, weights=w)))
+        return pd.Series(out)
+
+    by_year = test.groupby("year").apply(score)
+    by_gap = test.groupby("gap_group", observed=True).apply(score)
+    return {"fits": fits, "by_year": by_year, "by_gap": by_gap, "test": test}
+
+
+def smm_to_cpr_scalar(smm: float) -> float:
+    return float(1.0 - (1.0 - smm) ** 12)
 
 
 # ----------------------------------------------------------------------------- default
@@ -245,13 +331,15 @@ def run_all(hpi: pd.Series | None, mrate: pd.Series, vintages=fr.VINTAGES,
     mrate: market 30y mortgage rate by YYYYMM (Freddie PMMS, FRED MORTGAGE30US), the same
     kind of rate a scenario path supplies to prepayment.calculate_cpr.
     """
-    pre, dflt, liq, pipe, rolls = [], [], [], [], []
+    pre, pre_y, dflt, liq, pipe, rolls = [], [], [], [], [], []
     for y in vintages:
         panel = fr.load_panel(y)
         if sample_frac < 1:
             ids = panel["loan_id"].drop_duplicates().sample(frac=sample_frac, random_state=y)
             panel = panel[panel["loan_id"].isin(ids)]
-        pre.append(prepay_buckets(panel, mrate))
+        rows = _prepay_rows(panel, mrate)
+        pre.append(rows.drop(columns="year").groupby(PREPAY_KEYS).sum().reset_index())
+        pre_y.append(rows.groupby(["year"] + PREPAY_KEYS).sum().reset_index())
         dflt.append(default_buckets(default_rows(panel, hpi)))
         liq.append(liquidations(panel, hpi))
         pipe.append(pipeline_outcomes(panel))
@@ -263,6 +351,9 @@ def run_all(hpi: pd.Series | None, mrate: pd.Series, vintages=fr.VINTAGES,
     d["ltv"], d["fico"], d["dti"] = d["wl"] / d["n"], d["wf"] / d["n"], d["wd"] / d["n"]
     return {
         "prepay": combine_prepay(pd.concat(pre)), "default": d,
+        # by calendar year, for lock-in and out-of-time validation (notebook 09); the raw
+        # weighted sums are kept so years can be regrouped with by_year_to_buckets()
+        "prepay_by_year": pd.concat(pre_y).groupby(["year"] + PREPAY_KEYS).sum().reset_index(),
         "liquidations": pd.concat(liq, ignore_index=True),
         "pipeline": pd.concat(pipe), "dq30_roll": tuple(np.sum(rolls, axis=0)),
         "mrate": mrate,
