@@ -34,7 +34,7 @@ for s in [10.0, 50.0]:
 h = np.asarray(p828["hpi"], float).copy(); n=len(h)
 drop = np.ones(n); drop[1:25] = np.linspace(1,0.70,25)[1:]; drop[25:] = 0.70
 crash = {"hpi": h[0]*drop, "rate": p828["rate"]}
-for d, label in [(0.70,"crash30"),(0.55,"crash45")]:
+for d, label in [(0.70, "crash30")]:
     dr = np.ones(n); dr[1:25]=np.linspace(1,d,25)[1:]; dr[25:]=d
     pools = du.project_shifts(pool, {"hpi": h[0]*dr, "rate": p828["rate"]}, 0.025)
     for cname, cd in du.CALL_CASES.items():
