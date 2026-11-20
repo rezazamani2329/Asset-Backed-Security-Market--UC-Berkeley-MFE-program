@@ -17,7 +17,7 @@ import warnings
 import pandas as pd
 
 from src.pricing import price, weighted_average_life
-from src.waterfall import MIN_SUBORDINATE_PCT, current_tranches, run
+from src.waterfall import CALL_DATE, MIN_SUBORDINATE_PCT, current_tranches, run
 
 
 SCENARIOS = ("good", "base", "moderate", "severe")
@@ -59,8 +59,13 @@ def _load_inputs(pool_path: Path, rates_path: Path, scenario: str) -> tuple[pd.D
     return pool, rates
 
 
-def run_scenario(pool: pd.DataFrame, rates: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Return long-form tranche cash flows and offered-class metrics."""
+def run_scenario(pool: pd.DataFrame, rates: pd.DataFrame, *,
+                 call_date: pd.Timestamp | None = CALL_DATE) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Return long-form tranche cash flows and offered-class metrics.
+
+    ``call_date=None`` runs without Freddie Mac's optional call (notes run to the pool's
+    paydown or the 2046 scheduled maturity); the default keeps the Feb 2031 call.
+    """
     scenario = str(rates["scenario"].iloc[0])
     state = current_tranches(float(pool["beginning_balance"].iloc[0]))
     starting_face = {t.name: t.balance for t in state}
@@ -86,6 +91,7 @@ def run_scenario(pool: pd.DataFrame, rates: pd.DataFrame) -> tuple[pd.DataFrame,
         starting_payment_number=STARTING_PAYMENT_NUMBER,
         initial_cumulative_loss=INITIAL_CUMULATIVE_LOSS,
         initial_distressed_history=INITIAL_DISTRESSED_HISTORY,
+        call_date=call_date,
     )
 
     cashflows = pd.concat(
@@ -95,11 +101,13 @@ def run_scenario(pool: pd.DataFrame, rates: pd.DataFrame) -> tuple[pd.DataFrame,
     cashflows.insert(0, "scenario", scenario)
 
     summary_rows = []
-    discount_days = rates["discount_days"].to_numpy(float)
-    sofr = rates["sofr_coupon_decimal"].to_numpy(float)
+    all_discount_days = rates["discount_days"].to_numpy(float)
+    all_sofr = rates["sofr_coupon_decimal"].to_numpy(float)
     for name in OFFERED_CLASSES:
         frame = outputs[name]
         face = starting_face[name]
+        # A call ends the cash flows early: price only the months that were paid.
+        discount_days, sofr = all_discount_days[: len(frame)], all_sofr[: len(frame)]
         total_per_100 = (frame["interest"] + frame["principal"]).to_numpy(float) / face * 100.0
         principal = frame["principal"].to_numpy(float)
         row = {
