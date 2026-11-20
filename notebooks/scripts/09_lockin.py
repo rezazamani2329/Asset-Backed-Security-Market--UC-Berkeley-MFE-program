@@ -300,7 +300,9 @@ if b_year is not None:
     display(yr[["loan_months_mm", "avg_incentive_pp", "cpr_pct"]])
 
 
-# **Result.** *To be filled after running this notebook on the Mac with the Freddie Mac files.* In the cloud copy this cell printed a message and skipped, because the licensed data is not in the repository.
+# **Result.** The Freddie Mac sample gives 0.15-3.2 million loan-months per year from 2000 to 2026. The lock-in era is easy to see. The average refinancing incentive (coupon minus market rate) is **−1.35 pp in 2022, −2.43 pp in 2023, −1.79 pp in 2024 and −1.37 pp in 2025**. Before 2022 it was never below −0.46 pp (2006). Observed CPR fell from 31-34% in 2020-2021 to **5.4% in 2023**, the lowest in the sample, and recovered to 7-14% in 2024-2026 as rates eased and the gap narrowed.
+# 
+# **What this means.** 2022-2026 is the only period with deep negative incentives, so it is the only period that can identify lock-in. Earlier years have almost no loans far below market, which matters for section 9.
 
 # ## 8 · Estimating the lock-in strength
 # 
@@ -334,7 +336,18 @@ if b_year is not None:
     print(f"Turnover kept at a 1 pp gap: 2022-2026 estimate {np.exp(-g_era):.1%}, FHFA {np.exp(-pp.LOCKIN_FHFA):.1%}")
 
 
-# **Result.** *To be filled after the Mac run.* The key number is the 2022-2026 lock-in estimate and how it compares with FHFA's 0.20.
+# **Result.** All three estimates of the lock-in strength are well below FHFA's 0.20 per pp:
+# 
+# | estimate | lock-in strength | turnover kept at a 1 pp gap |
+# |---|---|---|
+# | refit 2000-2026, all 7 parameters | 0.089 | 91.5% |
+# | lock-in only, 2000-2021 | 0.037 | 96.4% |
+# | lock-in only, 2022-2026 | **0.025** | **97.5%** |
+# | FHFA WP 24-03 | 0.200 | 81.9% |
+# 
+# When lock-in is added, the refit also raises baseline turnover from 5.5% to 6.6% and leaves the S-curve almost unchanged (refi_max 0.41 → 0.40, midpoint 0.71 → 0.73).
+# 
+# **Why our number is smaller than FHFA's.** (1) FHFA measures the probability of *selling the house*. Our target is *all voluntary prepayment*, which also includes curtailments and payoffs that do not depend on the rate gap, so the gap explains a smaller share of it. (2) Our model already slows prepayment for out-of-the-money loans through the S-curve and burnout, so part of what FHFA calls lock-in is already in the baseline. (3) The full refit trades lock-in against higher turnover, which is why it gives a larger number (0.089) than the lock-in-only fits. So the honest range from our data is **about 0.03 to 0.09**, with 0.025 for the lock-in era itself.
 
 # ## 9 · Out-of-time validation
 # 
@@ -359,7 +372,13 @@ if b_year is not None:
         display(res["by_year"]); display(res["by_gap"])
 
 
-# **Result.** *To be filled after the Mac run.* We will report whether adding lock-in lowers the out-of-sample error in 2022-2026, especially for loans more than 1 pp below market.
+# **Result.** In both splits the lock-in strength fitted on the training years lands at **0** (the lower bound), so the lock-in and no-lock-in models are identical out of sample. The test cannot tell them apart. This is the identification problem from section 7: before 2022 there are almost no loans far below market, so the training data has nothing to learn lock-in from.
+# 
+# How the (shared) model does out of time:
+# - **Train 2000-2018, test 2019-2026.** It under-predicts the 2020-2021 refinancing boom (CPR 34% observed vs. 24% predicted), but tracks the lock-in years well (2023: 5.4% vs. 5.0%; 2024: 7.2% vs. 7.4%). Errors are smallest for loans more than 2 pp below market (RMSE 0.001).
+# - **Train 2000-2021, test 2022-2026.** Year-level CPRs are close (2023: 5.4% vs. 5.6%; 2025: 9.8% vs. 9.7%). By gap group, it **over-predicts** loans more than 2 pp below market (5.5% vs. 4.9%, about 12% too fast) and **under-predicts** loans 0-2 pp below (6.5-7.5% observed vs. 5.4-6.4%).
+# 
+# **What this means.** The pattern by gap is what mild lock-in predicts for deep gaps (prepayment slower than the model), but shallowly locked loans prepay *faster* than the model. A single exponential lock-in curve cannot fit both. A flatter curve, or a threshold that bites only beyond about 2 pp, is the natural next specification.
 
 # ## 10 · WALs with the estimated lock-in
 # 
@@ -377,13 +396,26 @@ if b_year is not None:
             .rename_axis(["rate path", "WAL (years)"]))
 
 
-# **Result.** *To be filled after the Mac run*, with the WALs from our own estimated lock-in strength.
+# **Result.** With our estimated strength (0.025), WALs stay very close to the no-lock-in numbers:
+# - **Base case:** M-1 1.195 / 1.219 / 1.198 years (none / FHFA / estimated); M-2B 2.819 / 2.841 / 2.822.
+# - **Moderate:** M-1 1.869 / 1.987 / 1.882; M-2B 3.840 / 3.952 / 3.874.
+# - **Flat 7.28%:** M-1 1.883 / 2.043 / 1.906; M-2A 4.306 / 4.397 / 4.329; M-2B at the call (4.40).
+# - **Rates +1 pp:** M-1 2.593 / 3.069 / 2.658; both M-2 classes at the call.
+# - **Rates −1 pp:** essentially no change.
+# 
+# So with the lock-in our data supports, M-1's extension at +1 pp is about **0.07 years**, compared with 0.48 years under FHFA's strength. The rate path itself moves M-1's WAL by about 2 years (0.61 at 6.28% vs. 2.59 at 8.28%).
 
-# ## Conclusion (so far)
+# ## Conclusion
 # 
 # 1. **DNA1 is only mildly locked in today.** 87% of its balance has a coupon below market, but mostly by less than 1 pp, because the loans were made in 2025 at already-high rates.
-# 2. **On the team's falling-rate scenarios, lock-in barely changes WALs or prices** (M-2B WAL 2.82 → 2.84 years; DM change below 1 bp), because falling rates close the rate gap.
-# 3. **When rates stay high, lock-in extends the notes materially.** On a flat 7.28% path M-1 extends by 0.16-0.31 years; at 8.28% by 0.48-0.82 years, and pool CPR is cut by 25-43%.
-# 4. **The 2031 call caps M-2's extension** at 4.4 years in every high-rate case, so the call option and lock-in interact. This links directly to Prof. Wallace's question about the duration of CRT bonds and the cost of risk transfer.
+# 2. **Freddie Mac data supports a weaker lock-in than FHFA's.** For all voluntary prepayment, our estimate is 0.025 per pp on 2022-2026 (0.03-0.09 across methods), against FHFA's 0.20 for home sales.
+# 3. **With that strength, lock-in barely changes the notes' WALs.** M-1 extends by about 0.07 years at +1 pp, against 0.48 years under FHFA's strength. Under the falling-rate base case the effect is under 0.01 years.
+# 4. **The rate path and the 2031 call drive CRT duration.** The S-curve already slows prepayment when loans are out of the money, which moves M-1's WAL by about 2 years across the rate paths. The call caps M-2 at 4.4 years whenever rates stay high.
+# 5. **Out-of-time tests can't identify lock-in from pre-2022 data.** Pre-2022 data has no deeply locked loans. The 2022-2026 errors by gap group (deep gaps too fast, shallow gaps too slow) point to a non-exponential lock-in curve.
 # 
-# **Next steps.** (a) Estimate the lock-in strength on Freddie 2022-2026 data and validate it out of time (sections 7-9, on the Mac). (b) Run without the call to measure M-2's full extension. (c) Compute effective and spread duration of each note under each lock-in case. (d) Translate the extra duration into the cost of risk transfer for Freddie Mac.
+# **Next steps.**
+# - (a) Try a threshold or piecewise lock-in curve, and separate home sales from other payoffs where the data allows.
+# - (b) Run without the call to measure M-2's full extension.
+# - (c) Compute effective and spread duration for each note.
+# - (d) Translate the extra duration into the cost of risk transfer for Freddie Mac.
+# - (e) Ask Prof. Wallace whether the paper should frame lock-in as a duration *risk*, since it matters only when rates stay high, rather than as a level effect.
