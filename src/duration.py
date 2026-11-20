@@ -90,7 +90,11 @@ def note_cashflows(pool_cf: pd.DataFrame, rates: pd.DataFrame, call_date) -> dic
                     "sofr": rates["sofr_coupon_decimal"].to_numpy(float)[:m],
                     "days": rates["discount_days"].to_numpy(float)[:m],
                     "accrued": row["price_at_coupon_spread_dm"] - 100.0,
-                    "final_month": row["final_payment_month"], "writedown": row["total_writedown"]}
+                    "final_month": row["final_payment_month"], "writedown": row["total_writedown"],
+                    "face": row["starting_balance"], "spread_bps": row["coupon_spread_bps"],
+                    "balance": f["beginning_balance"].to_numpy(float),
+                    "writedowns": f["writedown"].to_numpy(float),
+                    "accrual_days": rates["coupon_accrual_days"].to_numpy(float)[:m]}
     return out
 
 
