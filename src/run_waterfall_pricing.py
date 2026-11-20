@@ -124,7 +124,10 @@ def run_scenario(pool: pd.DataFrame, rates: pd.DataFrame, *,
                 int(frame.loc[~frame["all_triggers_pass"], "month"].iloc[0])
                 if (~frame["all_triggers_pass"]).any() else pd.NA
             ),
-            "final_payment_month": int(frame.loc[frame["principal"] > 0, "month"].iloc[-1]),
+            "final_payment_month": (
+                int(frame.loc[frame["principal"] > 0, "month"].iloc[-1])
+                if (frame["principal"] > 0).any() else pd.NA
+            ),
         }
         for dm in DM_GRID_BPS:
             row[f"price_at_{int(dm)}bp_dm"] = price(total_per_100, sofr, dm, discount_days)
