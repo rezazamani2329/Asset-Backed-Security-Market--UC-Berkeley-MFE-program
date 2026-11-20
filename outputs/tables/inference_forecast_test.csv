@@ -1,0 +1,15 @@
+,0
+gamma_train,0.02408482159977098
+rmse_cpr_pp_estimated,1.7233381613078986
+rmse_cpr_pp_none,1.7197807630298723
+rmse_cpr_pp_fhfa,2.048904556582452
+dm_estimated_vs_none_mean_loss_diff,-2.023161086877302e-08
+dm_estimated_vs_none_dm_stat,-0.14556577271775095
+dm_estimated_vs_none_p_two_sided,0.8842641895299463
+dm_estimated_vs_none_T,15.0
+dm_estimated_vs_none_lags,2.0
+dm_estimated_vs_fhfa_mean_loss_diff,1.0695284248293034e-06
+dm_estimated_vs_fhfa_dm_stat,1.4706722616348307
+dm_estimated_vs_fhfa_p_two_sided,0.14137977119690673
+dm_estimated_vs_fhfa_T,15.0
+dm_estimated_vs_fhfa_lags,2.0
